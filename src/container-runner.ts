@@ -67,7 +67,11 @@ interface VolumeMount {
  */
 function mkdirWorld(dirPath: string): void {
   fs.mkdirSync(dirPath, { recursive: true });
-  try { fs.chmodSync(dirPath, 0o777); } catch { /* best-effort */ }
+  try {
+    fs.chmodSync(dirPath, 0o777);
+  } catch {
+    /* best-effort */
+  }
 }
 
 function buildVolumeMounts(
@@ -352,8 +356,10 @@ function buildContainerArgs(
   // Enable host.docker.internal resolution (Linux requires --add-host)
   if (
     process.platform === 'linux' &&
-    (process.env.http_proxy || process.env.https_proxy ||
-     process.env.HTTP_PROXY || process.env.HTTPS_PROXY)
+    (process.env.http_proxy ||
+      process.env.https_proxy ||
+      process.env.HTTP_PROXY ||
+      process.env.HTTPS_PROXY)
   ) {
     args.push('--add-host', 'host.docker.internal:host-gateway');
   }
@@ -470,16 +476,14 @@ export async function runContainerAgent(
 
     // Fallback: poll IPC output files when Docker stdout piping is broken
     // (e.g. on network filesystems like vepfs where Docker pipe data is lost)
-    const ipcOutputDir = path.join(
-      resolveGroupIpcPath(group.folder),
-      'output',
-    );
+    const ipcOutputDir = path.join(resolveGroupIpcPath(group.folder), 'output');
     fs.mkdirSync(ipcOutputDir, { recursive: true });
     let ipcPolling = true;
     const pollIpcOutput = () => {
       if (!ipcPolling) return;
       try {
-        const files = fs.readdirSync(ipcOutputDir)
+        const files = fs
+          .readdirSync(ipcOutputDir)
           .filter((f: string) => f.endsWith('.json'))
           .sort();
         for (const file of files) {
@@ -508,10 +512,16 @@ export async function runContainerAgent(
               outputChain = outputChain.then(() => onOutput(parsed));
             }
           } catch {
-            try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+            try {
+              fs.unlinkSync(filePath);
+            } catch {
+              /* ignore */
+            }
           }
         }
-      } catch { /* dir may not exist yet */ }
+      } catch {
+        /* dir may not exist yet */
+      }
       setTimeout(pollIpcOutput, 500);
     };
     setTimeout(pollIpcOutput, 1000);
@@ -661,7 +671,8 @@ export async function runContainerAgent(
       ipcPolling = false;
       // Do one final poll to catch any output written just before exit
       try {
-        const files = fs.readdirSync(ipcOutputDir)
+        const files = fs
+          .readdirSync(ipcOutputDir)
           .filter((f: string) => f.endsWith('.json'))
           .sort();
         for (const file of files) {
@@ -677,10 +688,16 @@ export async function runContainerAgent(
               outputChain = outputChain.then(() => onOutput(parsed));
             }
           } catch {
-            try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+            try {
+              fs.unlinkSync(filePath);
+            } catch {
+              /* ignore */
+            }
           }
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       const duration = Date.now() - startTime;
 
       // Sync Codex OAuth token back to host after container exits.
