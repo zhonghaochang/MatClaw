@@ -71,10 +71,25 @@ async function readStdin(): Promise<string> {
 const OUTPUT_START_MARKER = '---MATCLAW_OUTPUT_START---';
 const OUTPUT_END_MARKER = '---MATCLAW_OUTPUT_END---';
 
+const IPC_OUTPUT_DIR = '/workspace/ipc/output';
+let ipcOutputSeq = 0;
+
 function writeOutput(output: ContainerOutput): void {
+  // Primary: stdout markers (parsed by container-runner)
   console.log(OUTPUT_START_MARKER);
   console.log(JSON.stringify(output));
   console.log(OUTPUT_END_MARKER);
+
+  // Fallback: write to IPC file so container-runner can poll from filesystem
+  // when Docker stdout piping is broken (e.g. on network filesystems like vepfs)
+  try {
+    fs.mkdirSync(IPC_OUTPUT_DIR, { recursive: true });
+    const seq = String(ipcOutputSeq++).padStart(6, '0');
+    fs.writeFileSync(
+      path.join(IPC_OUTPUT_DIR, `${seq}-${Date.now()}.json`),
+      JSON.stringify(output),
+    );
+  } catch { /* best-effort */ }
 }
 
 function log(message: string): void {

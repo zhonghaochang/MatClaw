@@ -59,6 +59,17 @@ interface VolumeMount {
   readonly: boolean;
 }
 
+/**
+ * Create a directory with world-writable permissions.
+ * On network filesystems (vepfs, NFS) the host creates dirs as root but the
+ * container runs as uid 1000 (node). Ownership may be mapped to nobody:nogroup
+ * so we need mode 0o777 to ensure the container user can write.
+ */
+function mkdirWorld(dirPath: string): void {
+  fs.mkdirSync(dirPath, { recursive: true });
+  try { fs.chmodSync(dirPath, 0o777); } catch { /* best-effort */ }
+}
+
 function buildVolumeMounts(
   group: RegisteredGroup,
   isMain: boolean,
@@ -114,7 +125,10 @@ function buildVolumeMounts(
     group.folder,
     '.claude',
   );
-  fs.mkdirSync(groupSessionsDir, { recursive: true });
+  mkdirWorld(groupSessionsDir);
+  // Claude Agent SDK writes debug logs to ~/.claude/debug/ via appendFileSync
+  // without creating the directory first — ensure it exists before container start.
+  mkdirWorld(path.join(groupSessionsDir, 'debug'));
   const settingsFile = path.join(groupSessionsDir, 'settings.json');
   if (!fs.existsSync(settingsFile)) {
     fs.writeFileSync(
@@ -184,7 +198,7 @@ function buildVolumeMounts(
       group.folder,
       '.codex',
     );
-    fs.mkdirSync(groupCodexDir, { recursive: true });
+    mkdirWorld(groupCodexDir);
     // Copy auth.json so it coexists with engine-generated config.toml
     fs.copyFileSync(codexAuthFile, path.join(groupCodexDir, 'auth.json'));
     mounts.push({
@@ -217,9 +231,11 @@ function buildVolumeMounts(
   // Per-group IPC namespace: each group gets its own IPC directory
   // This prevents cross-group privilege escalation via IPC
   const groupIpcDir = resolveGroupIpcPath(group.folder);
-  fs.mkdirSync(path.join(groupIpcDir, 'messages'), { recursive: true });
-  fs.mkdirSync(path.join(groupIpcDir, 'tasks'), { recursive: true });
-  fs.mkdirSync(path.join(groupIpcDir, 'input'), { recursive: true });
+  mkdirWorld(groupIpcDir);
+  mkdirWorld(path.join(groupIpcDir, 'messages'));
+  mkdirWorld(path.join(groupIpcDir, 'tasks'));
+  mkdirWorld(path.join(groupIpcDir, 'input'));
+  mkdirWorld(path.join(groupIpcDir, 'output'));
   mounts.push({
     hostPath: groupIpcDir,
     containerPath: '/workspace/ipc',
@@ -312,6 +328,36 @@ function buildContainerArgs(
     args.push('-e', `AGENT_MODEL=${model}`);
   }
 
+  // Forward host proxy settings to the container so the agent can reach
+  // external APIs through SSH tunnels or corporate proxies.
+  // Replace localhost/127.0.0.1 with the Docker bridge IP so the container
+  // can reach the host's proxy listener.
+  for (const proxyVar of [
+    'http_proxy',
+    'https_proxy',
+    'HTTP_PROXY',
+    'HTTPS_PROXY',
+    'no_proxy',
+    'NO_PROXY',
+  ]) {
+    const val = process.env[proxyVar];
+    if (val) {
+      const containerVal = val.replace(
+        /127\.0\.0\.1|localhost/g,
+        'host.docker.internal',
+      );
+      args.push('-e', `${proxyVar}=${containerVal}`);
+    }
+  }
+  // Enable host.docker.internal resolution (Linux requires --add-host)
+  if (
+    process.platform === 'linux' &&
+    (process.env.http_proxy || process.env.https_proxy ||
+     process.env.HTTP_PROXY || process.env.HTTPS_PROXY)
+  ) {
+    args.push('--add-host', 'host.docker.internal:host-gateway');
+  }
+
   // Run as host user so bind-mounted files are accessible.
   // Skip when running as root (uid 0), as the container's node user (uid 1000),
   // or when getuid is unavailable (native Windows without WSL).
@@ -344,7 +390,7 @@ export async function runContainerAgent(
   const startTime = Date.now();
 
   const groupDir = resolveGroupFolderPath(group.folder);
-  fs.mkdirSync(groupDir, { recursive: true });
+  mkdirWorld(groupDir);
 
   const mounts = buildVolumeMounts(group, input.isMain);
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
@@ -375,7 +421,7 @@ export async function runContainerAgent(
   );
 
   const logsDir = path.join(groupDir, 'logs');
-  fs.mkdirSync(logsDir, { recursive: true });
+  mkdirWorld(logsDir);
 
   // Real-time streaming log: appended as stdout/stderr arrives
   // Use `tail -f` on this file to watch agent activity live
@@ -421,6 +467,54 @@ export async function runContainerAgent(
     let parseBuffer = '';
     let newSessionId: string | undefined;
     let outputChain = Promise.resolve();
+
+    // Fallback: poll IPC output files when Docker stdout piping is broken
+    // (e.g. on network filesystems like vepfs where Docker pipe data is lost)
+    const ipcOutputDir = path.join(
+      resolveGroupIpcPath(group.folder),
+      'output',
+    );
+    fs.mkdirSync(ipcOutputDir, { recursive: true });
+    let ipcPolling = true;
+    const pollIpcOutput = () => {
+      if (!ipcPolling) return;
+      try {
+        const files = fs.readdirSync(ipcOutputDir)
+          .filter((f: string) => f.endsWith('.json'))
+          .sort();
+        for (const file of files) {
+          const filePath = path.join(ipcOutputDir, file);
+          try {
+            const parsed: ContainerOutput = JSON.parse(
+              fs.readFileSync(filePath, 'utf-8'),
+            );
+            fs.unlinkSync(filePath);
+            if (parsed.newSessionId) {
+              newSessionId = parsed.newSessionId;
+            }
+            hadStreamingOutput = true;
+            resetTimeout();
+            liveStream.write(
+              `[ipc-fallback] ${JSON.stringify(parsed).slice(0, 500)}\n`,
+            );
+            agentEvents.emit('agent', {
+              type: 'agent:output',
+              group: group.name,
+              groupFolder: group.folder,
+              timestamp: new Date().toISOString(),
+              data: { result: parsed.result, status: parsed.status },
+            });
+            if (onOutput) {
+              outputChain = outputChain.then(() => onOutput(parsed));
+            }
+          } catch {
+            try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+          }
+        }
+      } catch { /* dir may not exist yet */ }
+      setTimeout(pollIpcOutput, 500);
+    };
+    setTimeout(pollIpcOutput, 1000);
 
     container.stdout.on('data', (data) => {
       const chunk = data.toString();
@@ -564,6 +658,29 @@ export async function runContainerAgent(
 
     container.on('close', (code) => {
       clearTimeout(timeout);
+      ipcPolling = false;
+      // Do one final poll to catch any output written just before exit
+      try {
+        const files = fs.readdirSync(ipcOutputDir)
+          .filter((f: string) => f.endsWith('.json'))
+          .sort();
+        for (const file of files) {
+          const filePath = path.join(ipcOutputDir, file);
+          try {
+            const parsed: ContainerOutput = JSON.parse(
+              fs.readFileSync(filePath, 'utf-8'),
+            );
+            fs.unlinkSync(filePath);
+            if (parsed.newSessionId) newSessionId = parsed.newSessionId;
+            hadStreamingOutput = true;
+            if (onOutput) {
+              outputChain = outputChain.then(() => onOutput(parsed));
+            }
+          } catch {
+            try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+          }
+        }
+      } catch { /* ignore */ }
       const duration = Date.now() - startTime;
 
       // Sync Codex OAuth token back to host after container exits.
