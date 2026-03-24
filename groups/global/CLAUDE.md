@@ -46,6 +46,10 @@ When working as a sub-agent or teammate, only use `send_message` if instructed t
 
 Files you create are saved in `/workspace/group/`. Use this for notes, research, or anything that should persist.
 
+**NEVER write files to `/tmp/`.** The `/tmp/` directory is on the system disk (limited space) and will be lost when the container stops. Always use `/workspace/group/` which is on a persistent data disk.
+
+For ML/benchmark tasks: every training run MUST go into a unique experiment directory (`/workspace/group/matbench/experiments/YYYY-MM-DD_model_description/`). NEVER overwrite previous experiments. Read the matbench-benchmark skill for the full protocol.
+
 ## Memory
 
 The `conversations/` folder contains searchable history of past conversations. Use this to recall context from previous sessions.

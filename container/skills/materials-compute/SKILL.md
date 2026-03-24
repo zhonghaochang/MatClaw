@@ -1,6 +1,6 @@
 ---
 name: materials-compute
-description: "Materials computation environment reference and skill index. READ THIS FIRST when performing any materials science calculation — contains the master index of all 221 skills across 44 groups."
+description: "Materials computation environment reference and skill index. READ THIS FIRST when performing any materials science calculation — contains the master index of all 229 skills across 45 groups."
 ---
 
 # Materials Computation Environment
@@ -229,6 +229,7 @@ Skills are located at `~/.claude/skills/<group>/<sub-skill>/SKILL.md`.
 | `interface` | heterostructure, grain-boundary | Heterostructure and grain boundary construction |
 | `biomolecular-md` | openmm-simulation | Biomolecular MD with OpenMM |
 | `molecular-qchem` | gaussian-qchem-workflow | Molecular quantum chemistry workflows |
+| `matbench-benchmark` | task-setup, composition-models, structure-gnn, sota-reproduction, training-pipeline, evaluation-submission, model-optimization | MatBench benchmark: data loading, GNN/composition models, SOTA reproduction, GPU training, evaluation, leaderboard submission. Uses `/opt/conda/envs/matbench/bin/python` |
 
 ### How to Use a Skill
 

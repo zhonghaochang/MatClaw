@@ -257,6 +257,84 @@ Also does a final poll on container close to catch any last-moment output.
 
 ---
 
+## Problem 6: `docker exec` and `docker run` stdout Completely Silent
+
+### Symptom
+When running interactive commands against a running container or launching one-off containers, **all stdout is lost** — no output reaches the host terminal:
+
+```bash
+# All of these produce ZERO output on the host:
+docker run --rm ubuntu:24.04 echo "hello"
+docker exec <running-container> pip list
+docker exec <running-container> /bin/bash -c "echo test"
+docker exec <running-container> python -c "print('hi')"
+
+# Even piping, tee, variable capture — all empty:
+result=$(docker exec <container> echo hello); echo "got: $result"
+# got:
+```
+
+stderr is also affected. Exit codes return correctly (0), but no data arrives.
+
+### Root Cause
+Same underlying issue as Problem 5. Docker's stdout/stderr pipe mechanism does not deliver data to the host process when the Docker daemon's storage backend (`/ebs/`) and the calling process's working directory (vepfs) are on different filesystem types.
+
+This affects:
+- `docker run` — stdout/stderr of the container's main process
+- `docker exec` — stdout/stderr of commands run inside an existing container
+- `docker logs` — may also be empty or incomplete
+
+This does **NOT** affect:
+- File I/O inside the container (reading/writing files works normally)
+- File I/O on bind-mounted volumes (container can write, host can read)
+- `docker cp` — copying files between container and host
+- `docker inspect`, `docker ps`, `docker history` — metadata commands work fine
+- Network operations inside the container (API calls, downloads, etc.)
+
+### Workarounds
+
+**Workaround 1: Write to file inside container, then `docker cp` out**
+```bash
+# Run command with output redirected to a file inside the container
+docker exec <container> /bin/bash -c "pip list > /tmp/output.txt 2>&1"
+
+# Copy the file out to the host
+docker cp <container>:/tmp/output.txt ./output.txt
+
+# Read it on the host
+cat ./output.txt
+```
+
+**Workaround 2: Write to a bind-mounted volume**
+```bash
+# If the container already has a mounted volume:
+docker exec <container> /bin/bash -c "pip list > /workspace/group/output.txt 2>&1"
+
+# Read directly from the host mount path
+cat groups/<group>/output.txt
+```
+
+**Workaround 3: Use `docker history` for image inspection**
+When you need to verify what was installed in an image (e.g., which pip packages), `docker history` reads image metadata — not container stdout — so it works reliably:
+
+```bash
+# Check all pip install layers in the image:
+docker history matclaw-agent:cuda --no-trunc | grep "pip install"
+```
+
+### Impact on MatClaw Operations
+- **Agent execution:** Not affected. MatClaw uses IPC file fallback (Problem 5 fix) for all agent output.
+- **Data downloads (e.g., matbench):** Not affected. Downloads and file operations happen inside the container filesystem or on mounted volumes.
+- **Model training:** Not affected. Training runs entirely inside the container.
+- **Manual debugging:** Affected. Developers must use file-based workarounds (above) instead of relying on terminal output from `docker exec`.
+
+### Lesson
+- In environments where Docker stdout is broken, **never assume command output will reach the host terminal**
+- Always have a file-based fallback for any cross-container communication
+- `docker history` and `docker inspect` are reliable alternatives for image introspection since they read daemon metadata, not container stdout
+
+---
+
 ## Debugging Techniques Learned
 
 ### 1. When Docker stdout is invisible

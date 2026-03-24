@@ -211,6 +211,39 @@ RUN pip install --no-cache-dir \
     e3nn \
     chgnet sevenn matgl
 
+# Matbench environment (isolated Python 3.11 — matbench requires older deps
+# that conflict with the base env's pymatgen/mace-torch stack)
+# Agent uses: /opt/conda/envs/matbench/bin/python
+RUN conda create -n matbench python=3.11 -y -c conda-forge --override-channels && \
+    /opt/conda/envs/matbench/bin/pip install --no-cache-dir \
+        torch torchvision torchaudio --index-url ${PYTORCH_INDEX} && \
+    /opt/conda/envs/matbench/bin/pip install --no-cache-dir --no-deps matbench && \
+    /opt/conda/envs/matbench/bin/pip install --no-cache-dir \
+        "matminer>=0.7.4" \
+        "scikit-learn>=1.0" \
+        "scipy>=1.9" \
+        "monty>=2022.4" \
+        "pymatgen>=2023" \
+        "pandas>=1.5,<3" \
+        "numpy>=1.23" && \
+    /opt/conda/envs/matbench/bin/pip install --no-cache-dir \
+        torch-geometric \
+        e3nn \
+        tensorboard && \
+    # SOTA model packages for MatBench leaderboard reproduction
+    /opt/conda/envs/matbench/bin/pip install --no-cache-dir \
+        chgnet \
+        matgl \
+        tpot \
+        kgcnn && \
+    # ALIGNN: install without deps (requires torch<=2.2.1 but works with newer)
+    /opt/conda/envs/matbench/bin/pip install --no-cache-dir --no-deps alignn && \
+    /opt/conda/envs/matbench/bin/pip install --no-cache-dir \
+        jarvis-tools lmdb aflow && \
+    # Pin setuptools<71 (tpot needs pkg_resources, removed in 72+)
+    /opt/conda/envs/matbench/bin/pip install --no-cache-dir "setuptools<71" && \
+    conda clean -afy
+
 # MPI environment (allow running as root in container)
 ENV OMPI_ALLOW_RUN_AS_ROOT=1
 ENV OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
@@ -248,7 +281,7 @@ RUN mkdir -p /workspace/group /workspace/global /workspace/extra /workspace/ipc/
 # Secrets are passed via stdin JSON — temp file is deleted immediately after Node reads it
 # Follow-up messages arrive via IPC files in /workspace/ipc/input/
 # For Codex engine: symlink skills from .claude/skills/ to .codex/skills/
-RUN printf '#!/bin/bash\nset -e\ncd /app && npx tsc --outDir /tmp/dist 2>&1 >&2\nln -s /app/node_modules /tmp/dist/node_modules\nchmod -R a-w /tmp/dist\nif [ "$AGENT_ENGINE" = "codex" ] && [ -d /home/node/.claude/skills ]; then\n  mkdir -p /home/node/.codex/skills\n  for skill in /home/node/.claude/skills/*/; do\n    [ -d "$skill" ] && ln -sf "$skill" /home/node/.codex/skills/ 2>/dev/null || true\n  done\nfi\ncat > /tmp/input.json\nnode /tmp/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+RUN printf '#!/bin/bash\nset -e\nrm -rf /tmp/dist\ncd /app && npx tsc --outDir /tmp/dist 2>&1 >&2\nln -s /app/node_modules /tmp/dist/node_modules\nchmod -R a-w /tmp/dist\nif [ "$AGENT_ENGINE" = "codex" ] && [ -d /home/node/.claude/skills ]; then\n  mkdir -p /home/node/.codex/skills\n  for skill in /home/node/.claude/skills/*/; do\n    [ -d "$skill" ] && ln -sf "$skill" /home/node/.codex/skills/ 2>/dev/null || true\n  done\nfi\ncat > /tmp/input.json\nnode /tmp/dist/index.js < /tmp/input.json\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Create node user (provided by node:22-slim but not ubuntu base)
 # Ubuntu 24.04 ships a default 'ubuntu' user at uid/gid 1000 — remove it first

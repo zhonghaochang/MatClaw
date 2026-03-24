@@ -303,6 +303,87 @@ const pollIpcOutput = () => {
 
 ---
 
+## 问题 6：`docker exec` 和 `docker run` 的 stdout 完全静默
+
+### 现象
+在宿主机上对运行中的容器执行命令、或启动一次性容器时，**所有 stdout 输出全部丢失** —— 终端上看不到任何内容：
+
+```bash
+# 以下命令在宿主机上全部产生零输出：
+docker run --rm ubuntu:24.04 echo "hello"
+docker exec <运行中的容器> pip list
+docker exec <运行中的容器> /bin/bash -c "echo test"
+docker exec <运行中的容器> python -c "print('hi')"
+
+# 管道、tee、变量捕获 —— 全部为空：
+result=$(docker exec <容器> echo hello); echo "结果: $result"
+# 结果:
+```
+
+stderr 同样受影响。退出码（exit code）能正确返回（0），但没有任何数据到达。
+
+### 根因
+与问题 5 是同一个底层原因。Docker 的 stdout/stderr 管道机制在 Docker daemon 的存储后端（`/ebs/`）和调用进程的工作目录（vepfs）处于不同文件系统类型时，无法将数据传递到宿主机进程。
+
+**受影响的操作：**
+- `docker run` — 容器主进程的 stdout/stderr
+- `docker exec` — 在已有容器内执行命令的 stdout/stderr
+- `docker logs` — 可能也为空或不完整
+
+**不受影响的操作：**
+- 容器内部的文件读写（完全正常）
+- bind mount 卷上的文件读写（容器写入、宿主机读取 —— 正常）
+- `docker cp` — 在容器和宿主机之间复制文件
+- `docker inspect`、`docker ps`、`docker history` — 元数据命令正常工作
+- 容器内的网络操作（API 调用、数据下载等）
+
+### 解决方法
+
+**方法 1：在容器内写文件，再用 `docker cp` 拷出来**
+```bash
+# 在容器内执行命令，输出重定向到文件
+docker exec <容器> /bin/bash -c "pip list > /tmp/output.txt 2>&1"
+
+# 将文件从容器中拷贝到宿主机
+docker cp <容器>:/tmp/output.txt ./output.txt
+
+# 在宿主机上查看
+cat ./output.txt
+```
+
+**方法 2：写到 bind mount 挂载的卷上**
+```bash
+# 如果容器已经有挂载卷：
+docker exec <容器> /bin/bash -c "pip list > /workspace/group/output.txt 2>&1"
+
+# 直接从宿主机的挂载路径读取
+cat groups/<群组>/output.txt
+```
+
+**方法 3：用 `docker history` 检查镜像内容**
+当需要验证镜像中安装了哪些包（比如 pip 包）时，`docker history` 读取的是镜像元数据而非容器 stdout，因此可以正常工作：
+
+```bash
+# 查看镜像中所有 pip install 层：
+docker history matclaw-agent:cuda --no-trunc | grep "pip install"
+```
+
+### 对 MatClaw 使用的影响
+
+| 场景 | 是否受影响 | 原因 |
+|------|-----------|------|
+| Agent 执行（飞书发消息触发） | 不受影响 | MatClaw 使用 IPC 文件 fallback（问题 5 的修复） |
+| 数据下载（如 matbench） | 不受影响 | 下载操作在容器内部或挂载卷上进行 |
+| 模型训练 | 不受影响 | 训练完全在容器内部运行 |
+| 手动调试（`docker exec`） | **受影响** | 开发者需要使用上述基于文件的替代方案 |
+
+### 教训
+- 在 Docker stdout 损坏的环境下，**永远不要假设命令输出能到达宿主机终端**
+- 任何跨容器的通信都应该有基于文件的 fallback 机制
+- `docker history` 和 `docker inspect` 是可靠的镜像检查手段，因为它们读取的是 daemon 的元数据，不经过容器 stdout
+
+---
+
 ## 调试技巧总结
 
 ### 1. Docker stdout 不可用时如何调试
