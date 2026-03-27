@@ -59,7 +59,7 @@ MatClaw is an **AI agent that autonomously performs materials science computatio
 - **Multiple MLIP models** — MACE-MP-0 (pre-installed), CHGNet, SevenNet, MatGL — all pre-installed and ready for rapid screening and molecular dynamics
 - **All-in-one container** — QE 7.5, LAMMPS, RASPA3, MACE, pymatgen, ASE, PyTorch pre-installed and ready
 - **Secure isolation** — Every computation runs in a disposable Docker container with filesystem isolation
-- **Flexible LLM backend** — Works with Anthropic Claude, DeepSeek, or any Anthropic-compatible API
+- **Flexible LLM backend** — Defaults to OpenAI Codex (`gpt-5.3-codex`, reasoning `high`), and also supports Anthropic Claude plus OpenAI/Anthropic-compatible APIs
 - **Multi-channel access** — Chat via Feishu, DingTalk, Gmail, WhatsApp, Telegram, Discord, Slack
 - **Chat commands** — `/watch`, `/status`, `/stop`, `/sessions`, `/new`, `/resume`, `/compact` — manage sessions, monitor progress, and control the agent directly from chat
 - **Real-time dashboard** — Web UI at `localhost:3210` with live agent activity, parsed transcripts, and container logs
@@ -166,8 +166,9 @@ echo '{
   "chatJid": "test@g.us",
   "isMain": false,
   "secrets": {
-    "ANTHROPIC_API_KEY": "your-api-key",
-    "ANTHROPIC_BASE_URL": "https://api.anthropic.com"
+    "OPENAI_API_KEY": "your-api-key",
+    "CODEX_MODEL": "gpt-5.3-codex",
+    "CODEX_REASONING_EFFORT": "high"
   }
 }' | docker run -i -v ./workspace:/workspace/group matclaw-agent:latest
 ```
@@ -413,13 +414,14 @@ For full architecture details, see [docs/SPEC.md](docs/SPEC.md). For the securit
 
 ### API Keys
 
-MatClaw works with any Anthropic-compatible API. Pass credentials via stdin JSON:
+MatClaw defaults to Codex/OpenAI auth, and also supports Anthropic-compatible APIs. Pass credentials via stdin JSON:
 
 ```json
 {
   "secrets": {
-    "ANTHROPIC_API_KEY": "your-key",
-    "ANTHROPIC_BASE_URL": "https://api.anthropic.com"
+    "OPENAI_API_KEY": "your-key",
+    "CODEX_MODEL": "gpt-5.3-codex",
+    "CODEX_REASONING_EFFORT": "high"
   }
 }
 ```
@@ -428,7 +430,8 @@ MatClaw works with any Anthropic-compatible API. Pass credentials via stdin JSON
 
 | Provider | Base URL | Notes |
 |----------|----------|-------|
-| [Anthropic](https://www.anthropic.com/) | `https://api.anthropic.com` | Claude models, recommended |
+| [OpenAI](https://platform.openai.com/) | `https://api.openai.com/v1` | Codex default path, supports `gpt-5.3-codex` |
+| [Anthropic](https://www.anthropic.com/) | `https://api.anthropic.com` | Claude models |
 | [DeepSeek](https://www.deepseek.com/) | `https://api.deepseek.com/anthropic` | Cost-effective, tool_use support |
 
 ### Environment Variables

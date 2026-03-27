@@ -48,7 +48,28 @@ Files you create are saved in `/workspace/group/`. Use this for notes, research,
 
 **NEVER write files to `/tmp/`.** The `/tmp/` directory is on the system disk (limited space) and will be lost when the container stops. Always use `/workspace/group/` which is on a persistent data disk.
 
-For ML/benchmark tasks: every training run MUST go into a unique experiment directory (`/workspace/group/matbench/experiments/YYYY-MM-DD_model_description/`). NEVER overwrite previous experiments. Read the matbench-benchmark skill for the full protocol.
+For ML/benchmark tasks — FILE MANAGEMENT IS STRICTLY ENFORCED:
+
+ALLOWED write locations:
+  /workspace/group/matbench/experiments/YYYY-MM-DD_description/scripts/  ← training scripts
+  /workspace/group/matbench/experiments/YYYY-MM-DD_description/models/   ← .pt checkpoints
+  /workspace/group/matbench/experiments/YYYY-MM-DD_description/results/  ← .json.gz results
+  /workspace/group/matbench/experiments/YYYY-MM-DD_description/logs/     ← training logs
+  /workspace/group/matbench/experiments/YYYY-MM-DD_description/plots/    ← visualizations
+
+FORBIDDEN write locations (will cause file pollution):
+  /workspace/group/*.py                    ← NO scripts in group root
+  /workspace/group/matbench/*.py           ← NO scripts in matbench root
+  /workspace/group/matbench/results/       ← NO flat results directory
+  /workspace/group/matbench/models/        ← NO flat models directory
+  /tmp/                                    ← NO files on system disk
+
+Before writing ANY file, check: is the path inside experiments/YYYY-MM-DD_xxx/? If not, STOP and fix the path.
+
+Other rules:
+- ALWAYS use deep learning for SOTA attempts. NEVER default to sklearn/XGBoost/RF.
+- Study reference repos at `/workspace/group/matbench/reference/repos/` (83 SOTA model repos) before designing models.
+- Read the matbench-benchmark skill (especially auto-tournament/) for the full protocol.
 
 ## Memory
 

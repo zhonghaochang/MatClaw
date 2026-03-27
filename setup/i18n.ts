@@ -384,11 +384,15 @@ const en: TranslationMap = {
   // Auth methods
   'api.authMethod': 'Authentication method:',
   'api.authPasteKey': 'Paste API Key',
-  'api.authOAuthDetected': 'Claude Code OAuth (valid token detected)',
-  'api.authOAuthNotDetected': 'Claude Code OAuth (not detected)',
   'api.authEnvImport': 'Import from environment variable (one-time copy to .env)',
-  'api.authOAuthSuccess': 'Using Claude Code OAuth token (auto-detected).',
-  'api.authOAuthFail': 'No valid Claude Code OAuth token found. Run `claude` to log in.',
+  'api.authClaudeOAuthDetected': 'Claude Code OAuth (valid token detected)',
+  'api.authClaudeOAuthNotDetected': 'Claude Code OAuth (not detected)',
+  'api.authClaudeOAuthSuccess': 'Using Claude Code OAuth token (auto-detected).',
+  'api.authClaudeOAuthFail': 'No valid Claude Code OAuth token found. Run `claude` to log in.',
+  'api.authCodexOAuthDetected': 'Codex OAuth (auth.json detected)',
+  'api.authCodexOAuthNotDetected': 'Codex OAuth (auth.json not detected)',
+  'api.authCodexOAuthSuccess': 'Using Codex OAuth cache from auth.json.',
+  'api.authCodexOAuthFail': 'No Codex OAuth cache found. Run `codex login` first and ensure auth.json is written.',
 
   // Key input
   'api.envVarName': 'Environment variable name:',
@@ -759,11 +763,15 @@ const zh: TranslationMap = {
   // Auth methods
   'api.authMethod': '认证方式：',
   'api.authPasteKey': '粘贴 API Key',
-  'api.authOAuthDetected': 'Claude Code OAuth（已检测到有效 token）',
-  'api.authOAuthNotDetected': 'Claude Code OAuth（未检测到）',
   'api.authEnvImport': '从环境变量导入（一次性复制到 .env）',
-  'api.authOAuthSuccess': '已使用 Claude Code OAuth token（自动检测）。',
-  'api.authOAuthFail': '未找到有效的 Claude Code OAuth token。请运行 `claude` 登录。',
+  'api.authClaudeOAuthDetected': 'Claude Code OAuth（已检测到有效 token）',
+  'api.authClaudeOAuthNotDetected': 'Claude Code OAuth（未检测到）',
+  'api.authClaudeOAuthSuccess': '已使用 Claude Code OAuth token（自动检测）。',
+  'api.authClaudeOAuthFail': '未找到有效的 Claude Code OAuth token。请运行 `claude` 登录。',
+  'api.authCodexOAuthDetected': 'Codex OAuth（已检测到 auth.json）',
+  'api.authCodexOAuthNotDetected': 'Codex OAuth（未检测到 auth.json）',
+  'api.authCodexOAuthSuccess': '已使用 Codex OAuth 缓存（auth.json）。',
+  'api.authCodexOAuthFail': '未找到 Codex OAuth 缓存。请先运行 `codex login`，并确保生成 auth.json。',
 
   // Key input
   'api.envVarName': '环境变量名：',

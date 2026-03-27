@@ -21,10 +21,34 @@ import {
   type ItemStartedEvent,
   type ItemCompletedEvent,
   type ItemUpdatedEvent,
+  type ModelReasoningEffort,
 } from '@openai/codex-sdk';
 import { AgentEngine, EngineContext, QueryResult } from './interface.js';
 
 const IPC_POLL_MS = 500;
+const DEFAULT_CODEX_MODEL = 'gpt-5.3-codex';
+const DEFAULT_REASONING_EFFORT: ModelReasoningEffort = 'high';
+const VALID_REASONING_EFFORTS = new Set<ModelReasoningEffort>([
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+]);
+
+function normalizeReasoningEffort(
+  value: string | undefined,
+  ctx: EngineContext,
+): ModelReasoningEffort | undefined {
+  if (!value) return undefined;
+  if (VALID_REASONING_EFFORTS.has(value as ModelReasoningEffort)) {
+    return value as ModelReasoningEffort;
+  }
+  ctx.log(
+    `Ignoring unsupported CODEX_REASONING_EFFORT=${value}; expected one of ${Array.from(VALID_REASONING_EFFORTS).join(', ')}`,
+  );
+  return undefined;
+}
 
 function summarizeItem(item: ThreadItem): string {
   switch (item.type) {
@@ -72,7 +96,17 @@ export class CodexEngine implements AgentEngine {
 
     const apiKey = ctx.sdkEnv['CODEX_API_KEY'] || ctx.sdkEnv['OPENAI_API_KEY'];
     const baseUrl = ctx.sdkEnv['OPENAI_BASE_URL'];
-    const model = ctx.sdkEnv['CODEX_MODEL'] || process.env['AGENT_MODEL'] || 'o4-mini';
+    const model =
+      ctx.sdkEnv['CODEX_MODEL'] ||
+      ctx.sdkEnv['AGENT_MODEL'] ||
+      process.env['AGENT_MODEL'] ||
+      DEFAULT_CODEX_MODEL;
+    const reasoningEffort =
+      normalizeReasoningEffort(
+        ctx.sdkEnv['CODEX_REASONING_EFFORT'] ||
+          process.env['CODEX_REASONING_EFFORT'],
+        ctx,
+      ) || DEFAULT_REASONING_EFFORT;
 
     // If no API key is set, Codex CLI falls back to OAuth tokens in ~/.codex/auth.json
     // (obtained via `codex login` on the host, mounted by container-runner)
@@ -90,6 +124,7 @@ export class CodexEngine implements AgentEngine {
     }
 
     const codex = new Codex(codexOpts);
+    ctx.log(`Using Codex model: ${model} (reasoning: ${reasoningEffort})`);
 
     // Discover additional directories
     const additionalDirs: string[] = [];
@@ -105,6 +140,7 @@ export class CodexEngine implements AgentEngine {
       workingDirectory: '/workspace/group',
       sandboxMode: 'danger-full-access' as const,
       model,
+      modelReasoningEffort: reasoningEffort,
       skipGitRepoCheck: true,
       additionalDirectories: additionalDirs.length > 0 ? additionalDirs : undefined,
     };

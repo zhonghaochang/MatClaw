@@ -3872,7 +3872,7 @@ function renderChatSessions() {
   if (active) {
     chatStatusValue.innerHTML = `<span class="chat-status-dot"></span>${esc(active.title || 'New chat')}`;
     const meta = active.agent_session_id
-      ? `Claude session ${active.agent_session_id.slice(0, 8)}...`
+      ? `Agent session ${active.agent_session_id.slice(0, 8)}...`
       : 'Fresh conversation. First reply will create a new agent session.';
     chatStatusMeta.textContent = meta;
   } else {

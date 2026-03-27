@@ -1,62 +1,80 @@
-# Optimize MatBench Model Performance for SOTA
+# Deep Learning Optimization for MatBench SOTA
 
 ## When to Use This Skill
 
 This skill should be used when:
-- You have a working baseline model and want to push toward SOTA performance
-- You want to ensemble multiple models for improved accuracy
-- You need transfer learning strategies for small dataset tasks
-- You want systematic hyperparameter optimization
-- You need data augmentation or feature engineering strategies
-- You want a complete roadmap for achieving top leaderboard positions
+- You have a working deep learning baseline and want to push toward SOTA performance
+- You want to ensemble multiple deep learning models for improved accuracy
+- You need transfer learning from materials science foundation models
+- You want systematic neural architecture search and hyperparameter optimization
+- You need advanced PyTorch training tricks (SWA, EMA, mixup, cosine annealing)
+- You want a complete phased roadmap for achieving top leaderboard positions
 
 ## Method Selection
 
 ```
 What optimization strategy?
 
-Quick boost (any model)?
-  → Script 1: Multi-seed ensemble (average 3-5 models with different seeds)
+Quick boost (any DL model)?
+  -> Script 1: Multi-seed deep ensemble (average 3-5 models with different seeds)
 
-Small dataset (steels, jdft2d, phonons)?
-  → Script 3: Transfer learning from large-task pretrained models
-  → Script 5: Feature engineering
+Combine diverse architectures?
+  -> Script 2: Cross-architecture deep ensemble (CGCNN + Roost + MACE-MLP)
 
-Large dataset, want best accuracy?
-  → Script 4: Architecture search + hyperparameter sweep
-  → Script 2: Cross-architecture ensemble
+Small dataset or leverage pretrained weights?
+  -> Script 3: Transfer learning from foundation models (MACE-MP-0, CHGNet, M3GNet)
 
-Classification optimization?
-  → Script 2: Ensemble with probability averaging + threshold tuning
+Systematic architecture/hyperparam search?
+  -> Script 4: Neural architecture search with Optuna (GPU-accelerated)
 
-Systematic SOTA pursuit?
-  → Section 6: Complete SOTA strategy guide (phased roadmap)
+Squeeze last few % from a strong model?
+  -> Script 5: Advanced training tricks (SWA, EMA, mixup, cosine annealing)
+
+Full SOTA pursuit?
+  -> Section 6: Complete SOTA strategy roadmap (phased plan)
 ```
 
 ## Prerequisites
 
-- MatBench conda environment with torch, torch-geometric, matbench, matminer, scikit-learn
-- A working baseline model (see structure-gnn/ or composition-models/ skills)
+- MatBench conda environment with torch, torch-geometric, matbench, pymatgen
+- A working deep learning baseline (see structure-gnn/ or composition-models/ skills)
 - GPU recommended (NVIDIA A100-SXM4-80GB available)
+- Foundation model weights for transfer learning (MACE-MP-0, CHGNet, M3GNet)
 
-## Script 1: Multi-Seed Ensemble
+## Script 1: Multi-Seed Deep Ensemble
 
-Train the same model N times with different random seeds and average predictions. This is the simplest and most reliable way to improve results, typically yielding 5-15% MAE improvement.
+Train the same deep learning architecture N times with different random seeds and average predictions. This is the simplest and most reliable way to improve results, typically yielding 5-15% MAE improvement through variance reduction.
+
+### Key Parameters
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| `N_SEEDS` | 5 | More seeds = better but slower; 3-5 is typical |
+| `EPOCHS` | 300 | Per-seed training epochs |
+| `LR` | 1e-3 | Learning rate for each member |
+| `BATCH_SIZE` | 64 | Adjust for GPU memory |
 
 ```python
 #!/opt/conda/envs/matbench/bin/python
 """
-Multi-seed ensemble: train N identical models with different seeds,
-average predictions for improved robustness.
+Multi-seed deep ensemble: train N identical DL models with different seeds,
+average predictions for variance reduction.
 Typical improvement: 5-15% MAE reduction over single model.
 """
 import os
 os.environ["MATBENCH_DATA_HOME"] = "/workspace/group/matbench/data"
 
+import json
 import numpy as np
+from datetime import datetime
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
 from matbench.bench import MatbenchBenchmark
 from pymatgen.core import Structure
 
@@ -70,11 +88,18 @@ EPOCHS = 300
 LR = 1e-3
 BATCH_SIZE = 64
 
-# Classification tasks use probability averaging
 CLASSIFICATION_TASKS = {"matbench_expt_is_metal", "matbench_glass", "matbench_mp_is_metal"}
 is_classification = TASK_NAME in CLASSIFICATION_TASKS
 
+# Output directory
+timestamp = datetime.now().strftime("%Y-%m-%d")
+out_dir = f"/workspace/group/matbench/experiments/{timestamp}_multiseed_ensemble_{TASK_NAME}"
+os.makedirs(out_dir, exist_ok=True)
+
 mb = MatbenchBenchmark(autoload=False, subset=[TASK_NAME])
+
+seed_metrics = {seed: [] for seed in range(N_SEEDS)}
+ensemble_metrics = []
 
 for task in mb.tasks:
     task.load()
@@ -91,560 +116,110 @@ for task in mb.tasks:
 
         print(f"  Train: {len(train_inputs)}, Test: {len(test_inputs)}")
 
+        # === USER: Replace this section with your actual model + featurizer ===
+        # This is a placeholder showing the ensemble pattern.
+        # Swap in your GNN DataLoader, model class, training loop, etc.
+
         all_predictions = []
 
         for seed in range(N_SEEDS):
             print(f"\n  --- Seed {seed} ---")
 
-            # Set all random seeds
+            # Set all random seeds deterministically
             torch.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)
             np.random.seed(seed)
-            if torch.cuda.is_available():
-                torch.cuda.manual_seed(seed)
-                torch.cuda.manual_seed_all(seed)
 
-            # ========================================
-            # YOUR MODEL INITIALIZATION HERE
-            # Example with a generic model:
-            # model = CGCNN(config).to(device)
-            # ========================================
+            # --- Build your DL model here ---
+            # model = YourGNNModel(...).to(device)
+            # optimizer = optim.Adam(model.parameters(), lr=LR)
+            # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, ...)
+            # ... training loop over EPOCHS ...
+            # preds = model.predict(test_loader)
 
-            # Placeholder: replace with your actual model training
-            # For demonstration, we show the ensemble logic:
-            #
-            # optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
-            # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
-            #
-            # for epoch in range(EPOCHS):
-            #     model.train()
-            #     for batch in train_loader:
-            #         optimizer.zero_grad()
-            #         pred = model(batch)
-            #         loss = criterion(pred, batch.y)
-            #         loss.backward()
-            #         optimizer.step()
-            #     scheduler.step()
-            #     if (epoch + 1) % 50 == 0:
-            #         print(f"    Epoch {epoch+1}/{EPOCHS}")
-            #
-            # model.eval()
-            # with torch.no_grad():
-            #     seed_preds = model.predict(test_data)
+            # Placeholder: replace with actual model predictions
+            # all_predictions.append(preds)
 
-            # Placeholder predictions (replace with actual)
-            seed_preds = np.zeros(len(test_inputs))
+            print(f"    Seed {seed} training complete")
 
-            all_predictions.append(seed_preds)
-            print(f"    Seed {seed} predictions: mean={seed_preds.mean():.4f}, std={seed_preds.std():.4f}")
+        # --- Ensemble averaging ---
+        # pred_array = np.stack(all_predictions, axis=0)  # (N_SEEDS, n_test)
+        # if is_classification:
+        #     ensemble_preds = (pred_array.mean(axis=0) > 0.5).astype(bool)
+        # else:
+        #     ensemble_preds = pred_array.mean(axis=0)
 
-            # Save individual model
-            ckpt_dir = f"/workspace/group/matbench/models/ensemble/{TASK_NAME}/fold_{fold_idx}"
-            os.makedirs(ckpt_dir, exist_ok=True)
-            # torch.save(model.state_dict(), f"{ckpt_dir}/seed_{seed}.pt")
+        # Per-seed std shows prediction uncertainty
+        # pred_std = pred_array.std(axis=0)
+        # print(f"  Mean prediction std: {pred_std.mean():.4f}")
 
-        # Ensemble: average predictions
-        all_predictions = np.array(all_predictions)  # shape: (N_SEEDS, n_test)
+        # task.record(fold_idx, ensemble_preds)
+        print(f"  Fold {fold_idx} ensemble complete")
 
-        if is_classification:
-            # For classification: average probabilities, then threshold
-            ensemble_preds = all_predictions.mean(axis=0)
-            print(f"\n  Ensemble (probability avg): mean={ensemble_preds.mean():.4f}")
-        else:
-            # For regression: simple mean
-            ensemble_preds = all_predictions.mean(axis=0)
-            print(f"\n  Ensemble (mean): mean={ensemble_preds.mean():.4f}")
+    # Save results
+    # results = mb.get_results()
+    # with open(os.path.join(out_dir, "results.json"), "w") as f:
+    #     json.dump(results, f, indent=2)
 
-        # Measure ensemble diversity
-        pairwise_corr = np.corrcoef(all_predictions)
-        avg_corr = (pairwise_corr.sum() - N_SEEDS) / (N_SEEDS * (N_SEEDS - 1))
-        print(f"  Avg pairwise correlation: {avg_corr:.4f} (lower = more diverse = better)")
-
-        task.record(fold_idx, ensemble_preds, params={
-            "method": "multi_seed_ensemble",
-            "n_seeds": N_SEEDS,
-            "epochs": EPOCHS,
-            "lr": LR,
-        })
-        print(f"  Fold {fold_idx} ensemble recorded.")
-
-mb.validate()
-print(f"\nEnsemble Scores:\n{mb.scores}")
-
-results_dir = "/workspace/group/matbench/results"
-os.makedirs(results_dir, exist_ok=True)
-mb.to_file(f"{results_dir}/ensemble_{N_SEEDS}seed_{TASK_NAME}_results.json.gz")
-print(f"Results saved.")
+print(f"\nResults saved to {out_dir}")
 ```
 
-## Script 2: Cross-Architecture Ensemble
+### Common Issues
 
-Train multiple different model architectures and combine their predictions. Weighted averaging based on validation performance often yields better results than any single model.
+| Issue | Solution |
+|-------|----------|
+| OOM with many seeds | Reduce `BATCH_SIZE` or train seeds sequentially, deleting model between seeds |
+| Diminishing returns past 5 seeds | Normal -- variance reduction scales as 1/sqrt(N) |
+| Seeds produce very similar predictions | Increase `LR` spread or use dropout for diversity |
+| GPU underutilized | Use `torch.compile(model)` on PyTorch 2.x for speedup |
+
+---
+
+## Script 2: Cross-Architecture Deep Ensemble
+
+Combine predictions from multiple distinct deep learning architectures (e.g., CGCNN, Roost, MACE-MLP). Architecture diversity provides complementary error patterns that simple seed ensembles cannot capture.
+
+### Key Parameters
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| `ARCHITECTURES` | `["cgcnn", "roost", "mace_mlp"]` | List of DL model types |
+| `WEIGHTING` | `"learned"` | `"equal"`, `"learned"`, or `"val_performance"` |
+| `META_EPOCHS` | 50 | Epochs for training the learned weighting MLP |
 
 ```python
 #!/opt/conda/envs/matbench/bin/python
 """
-Cross-architecture ensemble: combine CGCNN + SchNet + RF predictions.
-Weighted average based on per-fold validation performance.
-Often the easiest path to competitive leaderboard scores.
-"""
-import os
-os.environ["MATBENCH_DATA_HOME"] = "/workspace/group/matbench/data"
-
-import numpy as np
-import torch
-from matbench.bench import MatbenchBenchmark
-from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_error, roc_auc_score
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
-
-TASK_NAME = "matbench_log_gvrh"  # Change as needed
-CLASSIFICATION_TASKS = {"matbench_expt_is_metal", "matbench_glass", "matbench_mp_is_metal"}
-is_classification = TASK_NAME in CLASSIFICATION_TASKS
-
-mb = MatbenchBenchmark(autoload=False, subset=[TASK_NAME])
-
-for task in mb.tasks:
-    task.load()
-    print(f"\nTask: {task.dataset_name}")
-
-    for fold_idx in task.folds:
-        print(f"\n{'='*50}")
-        print(f"Fold {fold_idx}")
-        print(f"{'='*50}")
-
-        train_inputs, train_outputs = task.get_train_and_val_data(fold_idx)
-        test_inputs = task.get_test_data(fold_idx, include_target=False)
-
-        # Split training data for validation (to determine ensemble weights)
-        val_size = min(0.1, 500 / len(train_inputs))
-        tr_idx, val_idx = train_test_split(
-            range(len(train_inputs)), test_size=val_size, random_state=42
-        )
-
-        model_predictions = {}  # {model_name: (val_preds, test_preds, val_score)}
-
-        # --- Model 1: CGCNN ---
-        print("\n  Training CGCNN...")
-        # Replace with actual CGCNN training
-        # cgcnn_model = CGCNN(config).to(device)
-        # ... train ...
-        # cgcnn_val_preds = cgcnn_model.predict(val_data)
-        # cgcnn_test_preds = cgcnn_model.predict(test_data)
-        cgcnn_val_preds = np.zeros(len(val_idx))    # placeholder
-        cgcnn_test_preds = np.zeros(len(test_inputs))  # placeholder
-        print("    CGCNN training complete.")
-
-        # --- Model 2: SchNet ---
-        print("  Training SchNet...")
-        # Replace with actual SchNet training
-        # schnet_model = SchNet(config).to(device)
-        # ... train ...
-        schnet_val_preds = np.zeros(len(val_idx))
-        schnet_test_preds = np.zeros(len(test_inputs))
-        print("    SchNet training complete.")
-
-        # --- Model 3: Random Forest ---
-        print("  Training Random Forest...")
-        # RF needs featurized inputs (Magpie or structure features)
-        # featurizer = matminer.featurizers...
-        # X_train = featurizer.featurize_many(train_inputs)
-        # For structure tasks, use structure fingerprints
-        # For composition tasks, use Magpie features
-        rf_val_preds = np.zeros(len(val_idx))
-        rf_test_preds = np.zeros(len(test_inputs))
-        print("    RF training complete.")
-
-        # --- Compute validation scores and weights ---
-        val_true = train_outputs.iloc[val_idx].values
-
-        models = {
-            "CGCNN": (cgcnn_val_preds, cgcnn_test_preds),
-            "SchNet": (schnet_val_preds, schnet_test_preds),
-            "RF": (rf_val_preds, rf_test_preds),
-        }
-
-        weights = {}
-        for name, (val_p, test_p) in models.items():
-            if is_classification:
-                score = roc_auc_score(val_true, val_p)
-                # Higher AUC = better = higher weight
-                weights[name] = score
-            else:
-                score = mean_absolute_error(val_true, val_p)
-                # Lower MAE = better = higher weight (use inverse)
-                weights[name] = 1.0 / max(score, 1e-8)
-            print(f"    {name} val score: {score:.4f}")
-
-        # Normalize weights
-        total_weight = sum(weights.values())
-        for name in weights:
-            weights[name] /= total_weight
-        print(f"\n  Ensemble weights: {weights}")
-
-        # --- Weighted ensemble ---
-        ensemble_preds = np.zeros(len(test_inputs))
-        for name, (val_p, test_p) in models.items():
-            ensemble_preds += weights[name] * test_p
-
-        task.record(fold_idx, ensemble_preds, params={
-            "method": "cross_architecture_ensemble",
-            "models": list(models.keys()),
-            "weights": weights,
-        })
-        print(f"  Fold {fold_idx} ensemble recorded.")
-
-mb.validate()
-print(f"\nCross-Architecture Ensemble Scores:\n{mb.scores}")
-
-results_dir = "/workspace/group/matbench/results"
-os.makedirs(results_dir, exist_ok=True)
-mb.to_file(f"{results_dir}/cross_ensemble_{TASK_NAME}_results.json.gz")
-print(f"Results saved.")
-```
-
-## Script 3: Transfer Learning
-
-Pretrain on a large MatBench task (e.g., matbench_mp_e_form with 132K samples), then fine-tune on a small task. Especially useful for matbench_jdft2d (636 samples) and matbench_phonons (1,265 samples).
-
-```python
-#!/opt/conda/envs/matbench/bin/python
-"""
-Transfer learning: pretrain on large task, fine-tune on small task.
-Strategy: train on matbench_mp_e_form, freeze early layers, fine-tune on target.
-Best for: matbench_jdft2d, matbench_phonons, matbench_steels.
-"""
-import os
-os.environ["MATBENCH_DATA_HOME"] = "/workspace/group/matbench/data"
-
-import numpy as np
-import torch
-import torch.nn as nn
-from matbench.bench import MatbenchBenchmark
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
-
-# Configuration
-PRETRAIN_TASK = "matbench_mp_e_form"  # Large source task (132K samples)
-TARGET_TASK = "matbench_jdft2d"       # Small target task (636 samples)
-PRETRAIN_EPOCHS = 200
-FINETUNE_EPOCHS = 100
-PRETRAIN_LR = 1e-3
-FINETUNE_LR = 1e-5   # Much lower LR for fine-tuning
-FROZEN_LAYERS = -2    # Freeze all but last 2 layers
-BATCH_SIZE = 64
-
-# === Phase 1: Pretrain on large task ===
-print(f"Phase 1: Pretraining on {PRETRAIN_TASK}")
-print(f"{'='*60}")
-
-pretrain_mb = MatbenchBenchmark(autoload=False, subset=[PRETRAIN_TASK])
-for pretrain_task in pretrain_mb.tasks:
-    pretrain_task.load()
-
-    # Use fold 0 for pretraining (we just need the weights, not recording)
-    train_inputs, train_outputs = pretrain_task.get_train_and_val_data(0)
-    print(f"  Pretrain data: {len(train_inputs)} samples")
-
-    # ========================================
-    # YOUR MODEL INITIALIZATION HERE
-    # model = YourGNN(config).to(device)
-    # ========================================
-
-    # Pretrain loop (replace with actual training)
-    # optimizer = torch.optim.AdamW(model.parameters(), lr=PRETRAIN_LR)
-    # for epoch in range(PRETRAIN_EPOCHS):
-    #     model.train()
-    #     for batch in pretrain_loader:
-    #         optimizer.zero_grad()
-    #         pred = model(batch)
-    #         loss = criterion(pred, batch.y)
-    #         loss.backward()
-    #         optimizer.step()
-    #     if (epoch + 1) % 50 == 0:
-    #         print(f"  Pretrain epoch {epoch+1}/{PRETRAIN_EPOCHS}")
-
-    # Save pretrained weights
-    pretrain_dir = f"/workspace/group/matbench/models/transfer/{PRETRAIN_TASK}"
-    os.makedirs(pretrain_dir, exist_ok=True)
-    # torch.save(model.state_dict(), f"{pretrain_dir}/pretrained.pt")
-    print(f"  Pretrained model saved to {pretrain_dir}/pretrained.pt")
-
-# === Phase 2: Fine-tune on small task ===
-print(f"\nPhase 2: Fine-tuning on {TARGET_TASK}")
-print(f"{'='*60}")
-
-target_mb = MatbenchBenchmark(autoload=False, subset=[TARGET_TASK])
-
-for task in target_mb.tasks:
-    task.load()
-    print(f"\nTarget task: {task.dataset_name} ({len(task.df)} samples)")
-
-    for fold_idx in task.folds:
-        print(f"\n  --- Fold {fold_idx} ---")
-        train_inputs, train_outputs = task.get_train_and_val_data(fold_idx)
-        test_inputs = task.get_test_data(fold_idx, include_target=False)
-        print(f"  Train: {len(train_inputs)}, Test: {len(test_inputs)}")
-
-        # Load pretrained model
-        # model = YourGNN(config).to(device)
-        # model.load_state_dict(torch.load(f"{pretrain_dir}/pretrained.pt"))
-
-        # Freeze all but last N layers
-        # all_params = list(model.named_parameters())
-        # n_total = len(all_params)
-        # freeze_up_to = n_total + FROZEN_LAYERS  # e.g., -2 means freeze all but last 2
-        # for i, (name, param) in enumerate(all_params):
-        #     if i < freeze_up_to:
-        #         param.requires_grad = False
-        #         print(f"    Frozen: {name}")
-        #     else:
-        #         param.requires_grad = True
-        #         print(f"    Trainable: {name}")
-
-        # Fine-tune with low learning rate
-        # trainable_params = [p for p in model.parameters() if p.requires_grad]
-        # optimizer = torch.optim.AdamW(trainable_params, lr=FINETUNE_LR)
-
-        # for epoch in range(FINETUNE_EPOCHS):
-        #     model.train()
-        #     for batch in finetune_loader:
-        #         optimizer.zero_grad()
-        #         pred = model(batch)
-        #         loss = criterion(pred, batch.y)
-        #         loss.backward()
-        #         optimizer.step()
-        #     if (epoch + 1) % 25 == 0:
-        #         print(f"    Fine-tune epoch {epoch+1}/{FINETUNE_EPOCHS}")
-
-        # Predict
-        # model.eval()
-        # with torch.no_grad():
-        #     predictions = model.predict(test_data)
-
-        predictions = np.zeros(len(test_inputs))  # Replace with actual
-
-        task.record(fold_idx, predictions, params={
-            "method": "transfer_learning",
-            "pretrain_task": PRETRAIN_TASK,
-            "pretrain_epochs": PRETRAIN_EPOCHS,
-            "finetune_epochs": FINETUNE_EPOCHS,
-            "finetune_lr": FINETUNE_LR,
-            "frozen_layers": FROZEN_LAYERS,
-        })
-        print(f"  Fold {fold_idx} fine-tuned and recorded.")
-
-        # Save fine-tuned model
-        ft_dir = f"/workspace/group/matbench/models/transfer/{TARGET_TASK}"
-        os.makedirs(ft_dir, exist_ok=True)
-        # torch.save(model.state_dict(), f"{ft_dir}/fold_{fold_idx}.pt")
-
-target_mb.validate()
-print(f"\nTransfer Learning Scores:\n{target_mb.scores}")
-
-results_dir = "/workspace/group/matbench/results"
-os.makedirs(results_dir, exist_ok=True)
-target_mb.to_file(f"{results_dir}/transfer_{TARGET_TASK}_results.json.gz")
-print(f"Results saved.")
-```
-
-## Script 4: Hyperparameter Optimization
-
-Systematic random search over hyperparameter space. Run abbreviated training (100 epochs) per configuration, select the best, then retrain with full epochs.
-
-```python
-#!/opt/conda/envs/matbench/bin/python
-"""
-Hyperparameter optimization via random search.
-Strategy: run short training (100 epochs) per config, rank, retrain best.
+Cross-architecture deep ensemble: combine CGCNN, Roost, MACE-MLP (or others).
+Uses learned weighting or simple averaging of predictions.
 """
 import os
 os.environ["MATBENCH_DATA_HOME"] = "/workspace/group/matbench/data"
 
 import json
-import time
 import numpy as np
+from datetime import datetime
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 import torch
+import torch.nn as nn
+import torch.optim as optim
 from matbench.bench import MatbenchBenchmark
-from sklearn.model_selection import train_test_split
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # Configuration
-TASK_NAME = "matbench_mp_e_form"  # Change as needed
-SEARCH_BUDGET = 20                # Number of random configs to try
-SHORT_EPOCHS = 100                # Abbreviated training for search
-FULL_EPOCHS = 500                 # Full training for best config
+TASK_NAME = "matbench_mp_e_form"
+ARCHITECTURES = ["cgcnn", "roost", "mace_mlp"]
+WEIGHTING = "learned"  # "equal", "learned", or "val_performance"
 
-# Define search space
-SEARCH_SPACE = {
-    "learning_rate": {"type": "log_uniform", "low": 1e-5, "high": 1e-2},
-    "hidden_dim": {"type": "choice", "values": [64, 128, 256, 512]},
-    "num_layers": {"type": "choice", "values": [2, 3, 4, 5, 6]},
-    "batch_size": {"type": "choice", "values": [32, 64, 128, 256]},
-    "weight_decay": {"type": "log_uniform", "low": 1e-6, "high": 1e-3},
-    "dropout": {"type": "uniform", "low": 0.0, "high": 0.5},
-}
+timestamp = datetime.now().strftime("%Y-%m-%d")
+out_dir = f"/workspace/group/matbench/experiments/{timestamp}_cross_arch_ensemble_{TASK_NAME}"
+os.makedirs(out_dir, exist_ok=True)
 
-def sample_config(space):
-    """Sample a random configuration from the search space."""
-    config = {}
-    for key, spec in space.items():
-        if spec["type"] == "choice":
-            config[key] = np.random.choice(spec["values"])
-        elif spec["type"] == "log_uniform":
-            log_val = np.random.uniform(np.log(spec["low"]), np.log(spec["high"]))
-            config[key] = float(np.exp(log_val))
-        elif spec["type"] == "uniform":
-            config[key] = float(np.random.uniform(spec["low"], spec["high"]))
-    return config
-
-# Phase 1: Random search with abbreviated training
-print(f"Phase 1: Random Search ({SEARCH_BUDGET} configs, {SHORT_EPOCHS} epochs each)")
-print(f"{'='*60}")
-
-mb_search = MatbenchBenchmark(autoload=False, subset=[TASK_NAME])
-for task in mb_search.tasks:
-    task.load()
-
-    # Use fold 0 for hyperparameter search
-    train_inputs, train_outputs = task.get_train_and_val_data(0)
-
-    # Split into search-train and search-val
-    val_size = min(0.15, 2000 / len(train_inputs))
-    tr_idx, val_idx = train_test_split(
-        range(len(train_inputs)), test_size=val_size, random_state=42
-    )
-    print(f"  Search train: {len(tr_idx)}, Search val: {len(val_idx)}")
-
-    results = []
-
-    for trial in range(SEARCH_BUDGET):
-        config = sample_config(SEARCH_SPACE)
-        print(f"\n  Trial {trial+1}/{SEARCH_BUDGET}: {config}")
-
-        start_time = time.time()
-
-        # ========================================
-        # YOUR MODEL TRAINING WITH config HERE
-        # model = YourGNN(
-        #     hidden_dim=int(config["hidden_dim"]),
-        #     num_layers=int(config["num_layers"]),
-        #     dropout=config["dropout"],
-        # ).to(device)
-        # optimizer = torch.optim.AdamW(
-        #     model.parameters(),
-        #     lr=config["learning_rate"],
-        #     weight_decay=config["weight_decay"],
-        # )
-        #
-        # for epoch in range(SHORT_EPOCHS):
-        #     model.train()
-        #     ... (train on tr_idx subset)
-        #
-        # model.eval()
-        # val_preds = model.predict(val_data)
-        # val_score = mean_absolute_error(val_true, val_preds)
-        # ========================================
-
-        val_score = np.random.uniform(0.01, 0.1)  # Placeholder
-        elapsed = time.time() - start_time
-
-        result = {
-            "trial": trial,
-            "config": {k: float(v) if isinstance(v, (np.floating, float)) else int(v) for k, v in config.items()},
-            "val_score": float(val_score),
-            "time_seconds": elapsed,
-        }
-        results.append(result)
-        print(f"    Val score: {val_score:.6f} ({elapsed:.1f}s)")
-
-    # Sort by validation score (lower MAE = better for regression)
-    results.sort(key=lambda x: x["val_score"])
-
-    print(f"\n{'='*60}")
-    print("Top 5 configurations:")
-    for i, r in enumerate(results[:5]):
-        print(f"  {i+1}. Score={r['val_score']:.6f} | Config: {r['config']}")
-
-    # Save all search results
-    hpopt_dir = "/workspace/group/matbench/models/hpopt"
-    os.makedirs(hpopt_dir, exist_ok=True)
-    with open(f"{hpopt_dir}/{TASK_NAME}_search_results.json", "w") as f:
-        json.dump(results, f, indent=2)
-    print(f"\nSearch results saved to {hpopt_dir}/{TASK_NAME}_search_results.json")
-
-    # Phase 2: Retrain best config with full epochs
-    best_config = results[0]["config"]
-    print(f"\nPhase 2: Retraining best config with {FULL_EPOCHS} epochs")
-    print(f"Best config: {best_config}")
-    print(f"{'='*60}")
-
-# Full benchmark with best config
-best_mb = MatbenchBenchmark(autoload=False, subset=[TASK_NAME])
-for task in best_mb.tasks:
-    task.load()
-
-    for fold_idx in task.folds:
-        print(f"\n  --- Fold {fold_idx} (full training) ---")
-        train_inputs, train_outputs = task.get_train_and_val_data(fold_idx)
-        test_inputs = task.get_test_data(fold_idx, include_target=False)
-
-        # ========================================
-        # TRAIN WITH best_config AND FULL_EPOCHS
-        # model = YourGNN(**best_config).to(device)
-        # ... full training loop ...
-        # predictions = model.predict(test_data)
-        # ========================================
-
-        predictions = np.zeros(len(test_inputs))  # Replace
-        task.record(fold_idx, predictions, params={
-            "method": "hpopt_best",
-            **best_config,
-            "epochs": FULL_EPOCHS,
-        })
-        print(f"  Fold {fold_idx} done.")
-
-best_mb.validate()
-print(f"\nOptimized Scores:\n{best_mb.scores}")
-
-results_dir = "/workspace/group/matbench/results"
-os.makedirs(results_dir, exist_ok=True)
-best_mb.to_file(f"{results_dir}/hpopt_{TASK_NAME}_results.json.gz")
-print(f"Results saved.")
-```
-
-## Script 5: Feature Engineering
-
-Combine GNN learned embeddings with handcrafted features from matminer for a hybrid approach that often outperforms either alone.
-
-```python
-#!/opt/conda/envs/matbench/bin/python
-"""
-Hybrid feature engineering: combine GNN embeddings + matminer handcrafted features.
-Strategy: extract penultimate-layer embeddings from trained GNN, concatenate with
-structural/compositional features, train a final prediction layer.
-"""
-import os
-os.environ["MATBENCH_DATA_HOME"] = "/workspace/group/matbench/data"
-
-import numpy as np
-import pandas as pd
-import torch
-import torch.nn as nn
-from matbench.bench import MatbenchBenchmark
-from sklearn.ensemble import GradientBoostingRegressor, GradientBoostingClassifier
-from sklearn.preprocessing import StandardScaler
-from pymatgen.core import Structure
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
-
-TASK_NAME = "matbench_log_gvrh"  # Change as needed
 CLASSIFICATION_TASKS = {"matbench_expt_is_metal", "matbench_glass", "matbench_mp_is_metal"}
 is_classification = TASK_NAME in CLASSIFICATION_TASKS
 
@@ -652,7 +227,6 @@ mb = MatbenchBenchmark(autoload=False, subset=[TASK_NAME])
 
 for task in mb.tasks:
     task.load()
-    print(f"\nTask: {task.dataset_name}")
 
     for fold_idx in task.folds:
         print(f"\n{'='*50}")
@@ -662,256 +236,842 @@ for task in mb.tasks:
         train_inputs, train_outputs = task.get_train_and_val_data(fold_idx)
         test_inputs = task.get_test_data(fold_idx, include_target=False)
 
-        # === Part A: GNN Embeddings ===
-        print("  Extracting GNN embeddings...")
+        arch_preds = {}
+        arch_val_scores = {}
 
-        # Load or train a GNN model (CGCNN, SchNet, etc.)
-        # model = load_trained_gnn(fold_idx)
+        for arch_name in ARCHITECTURES:
+            print(f"\n  Training {arch_name}...")
 
-        # Extract penultimate layer embeddings
-        # def get_embeddings(model, structures):
-        #     model.eval()
-        #     embeddings = []
-        #     with torch.no_grad():
-        #         for struct in structures:
-        #             graph = structure_to_graph(struct)
-        #             emb = model.get_embedding(graph)  # Hook into penultimate layer
-        #             embeddings.append(emb.cpu().numpy())
-        #     return np.array(embeddings)
+            # === USER: Load/train each architecture ===
+            # if arch_name == "cgcnn":
+            #     model = CGCNN(...).to(device)
+            # elif arch_name == "roost":
+            #     model = Roost(...).to(device)
+            # elif arch_name == "mace_mlp":
+            #     model = MACE_MLP(...).to(device)
+            #
+            # ... train model ...
+            # val_preds = model.predict(val_loader)
+            # val_score = compute_metric(val_targets, val_preds)
+            # arch_val_scores[arch_name] = val_score
+            #
+            # test_preds = model.predict(test_loader)
+            # arch_preds[arch_name] = test_preds
+
+            print(f"    {arch_name} training complete")
+
+        # --- Combine predictions ---
+        # pred_matrix = np.stack([arch_preds[a] for a in ARCHITECTURES], axis=0)
         #
-        # train_gnn_emb = get_embeddings(model, train_inputs)
-        # test_gnn_emb = get_embeddings(model, test_inputs)
+        # if WEIGHTING == "equal":
+        #     weights = np.ones(len(ARCHITECTURES)) / len(ARCHITECTURES)
+        #     ensemble_preds = (pred_matrix * weights[:, None]).sum(axis=0)
+        #
+        # elif WEIGHTING == "val_performance":
+        #     # Weight inversely proportional to validation error
+        #     errors = np.array([arch_val_scores[a] for a in ARCHITECTURES])
+        #     weights = (1.0 / errors) / (1.0 / errors).sum()
+        #     ensemble_preds = (pred_matrix * weights[:, None]).sum(axis=0)
+        #
+        # elif WEIGHTING == "learned":
+        #     # Train a small MLP to learn optimal combination
+        #     # Use validation set predictions as features, val targets as labels
+        #     class WeightNet(nn.Module):
+        #         def __init__(self, n_models):
+        #             super().__init__()
+        #             self.net = nn.Sequential(
+        #                 nn.Linear(n_models, 16),
+        #                 nn.ReLU(),
+        #                 nn.Linear(16, 1)
+        #             )
+        #         def forward(self, x):
+        #             return self.net(x).squeeze(-1)
+        #
+        #     weight_net = WeightNet(len(ARCHITECTURES)).to(device)
+        #     opt = optim.Adam(weight_net.parameters(), lr=1e-3)
+        #     # ... train weight_net on val predictions -> val targets ...
+        #     # ensemble_preds = weight_net(test_pred_tensor).detach().cpu().numpy()
+        #
+        # if is_classification:
+        #     ensemble_preds = ensemble_preds > 0.5
+        #
+        # task.record(fold_idx, ensemble_preds)
 
-        # Placeholder: replace with actual embeddings
-        EMB_DIM = 128
-        train_gnn_emb = np.random.randn(len(train_inputs), EMB_DIM)
-        test_gnn_emb = np.random.randn(len(test_inputs), EMB_DIM)
-        print(f"    GNN embeddings: {train_gnn_emb.shape}")
+    # Save
+    # results = mb.get_results()
+    # with open(os.path.join(out_dir, "results.json"), "w") as f:
+    #     json.dump(results, f, indent=2)
 
-        # === Part B: Handcrafted Features ===
-        print("  Computing matminer features...")
-
-        def compute_structure_features(structures):
-            """Compute handcrafted features for crystal structures."""
-            features = []
-            for i, struct in enumerate(structures):
-                try:
-                    feat = {
-                        "density": struct.density,
-                        "volume": struct.volume,
-                        "volume_per_atom": struct.volume / len(struct),
-                        "num_sites": len(struct),
-                        "avg_atomic_number": np.mean([s.specie.Z for s in struct]),
-                        "avg_atomic_mass": np.mean([s.specie.atomic_mass for s in struct]),
-                        "avg_electronegativity": np.mean([
-                            s.specie.X for s in struct if hasattr(s.specie, 'X') and s.specie.X is not None
-                        ]) if any(hasattr(s.specie, 'X') and s.specie.X for s in struct) else 0,
-                    }
-
-                    # Lattice features
-                    lattice = struct.lattice
-                    feat["a"] = lattice.a
-                    feat["b"] = lattice.b
-                    feat["c"] = lattice.c
-                    feat["alpha"] = lattice.alpha
-                    feat["beta"] = lattice.beta
-                    feat["gamma"] = lattice.gamma
-
-                    features.append(feat)
-                except Exception as e:
-                    features.append({k: 0.0 for k in [
-                        "density", "volume", "volume_per_atom", "num_sites",
-                        "avg_atomic_number", "avg_atomic_mass", "avg_electronegativity",
-                        "a", "b", "c", "alpha", "beta", "gamma"
-                    ]})
-
-                if (i + 1) % 1000 == 0:
-                    print(f"      Featurized {i+1}/{len(structures)}")
-
-            return pd.DataFrame(features).values
-
-        train_struct_feat = compute_structure_features(train_inputs)
-        test_struct_feat = compute_structure_features(test_inputs)
-        print(f"    Structure features: {train_struct_feat.shape}")
-
-        # === Part C: Concatenate and Scale ===
-        print("  Concatenating features...")
-        train_combined = np.hstack([train_gnn_emb, train_struct_feat])
-        test_combined = np.hstack([test_gnn_emb, test_struct_feat])
-        print(f"    Combined features: {train_combined.shape}")
-
-        # Handle NaN/Inf
-        train_combined = np.nan_to_num(train_combined, nan=0.0, posinf=0.0, neginf=0.0)
-        test_combined = np.nan_to_num(test_combined, nan=0.0, posinf=0.0, neginf=0.0)
-
-        scaler = StandardScaler()
-        train_scaled = scaler.fit_transform(train_combined)
-        test_scaled = scaler.transform(test_combined)
-
-        # === Part D: Train Final Predictor ===
-        print("  Training final predictor (GBR on combined features)...")
-        if is_classification:
-            final_model = GradientBoostingClassifier(
-                n_estimators=500, max_depth=6, learning_rate=0.05,
-                subsample=0.8, random_state=42
-            )
-        else:
-            final_model = GradientBoostingRegressor(
-                n_estimators=500, max_depth=6, learning_rate=0.05,
-                subsample=0.8, random_state=42
-            )
-
-        final_model.fit(train_scaled, train_outputs.values)
-
-        if is_classification:
-            predictions = final_model.predict_proba(test_scaled)[:, 1]
-        else:
-            predictions = final_model.predict(test_scaled)
-
-        task.record(fold_idx, predictions, params={
-            "method": "hybrid_gnn_features",
-            "gnn_emb_dim": EMB_DIM,
-            "struct_feat_dim": train_struct_feat.shape[1],
-            "final_model": "GradientBoosting",
-        })
-        print(f"  Fold {fold_idx} recorded. Predictions: mean={predictions.mean():.4f}")
-
-mb.validate()
-print(f"\nHybrid Feature Engineering Scores:\n{mb.scores}")
-
-results_dir = "/workspace/group/matbench/results"
-os.makedirs(results_dir, exist_ok=True)
-mb.to_file(f"{results_dir}/hybrid_{TASK_NAME}_results.json.gz")
-print(f"Results saved.")
+print(f"\nResults saved to {out_dir}")
 ```
 
-## Section 6: Complete SOTA Strategy Guide
+### Per-Task Recommended Architectures
 
-A phased roadmap for systematically achieving top MatBench leaderboard positions.
+| Task Category | Recommended Combination |
+|---------------|------------------------|
+| Structure-based regression | CGCNN + MEGNet + MACE-MLP |
+| Structure-based classification | CGCNN + SchNet + DimeNet++ |
+| Composition-only regression | Roost + CrabNet + ElemNet |
+| Composition-only classification | Roost + CrabNet |
 
-### Phase 1: Establish Baseline (Day 1)
-
-**Goal:** Get scores for all 13 tasks with simple models.
-
-```
-1. Composition tasks (5 tasks):
-   - Use composition-models/ skill: RF + Magpie features
-   - Run: matbench_steels, matbench_expt_gap, matbench_dielectric,
-          matbench_expt_is_metal, matbench_glass
-   - Expected: ~30 min total
-
-2. Structure tasks (8 tasks):
-   - Use structure-gnn/ skill: CGCNN with default config
-   - Run: all 8 structure tasks
-   - Expected: ~2-4 hours for small tasks, ~8-12 hours for mp_e_form
-
-3. Record all results using evaluation-submission/ Script 1
-4. Compare to leaderboard using evaluation-submission/ Script 3
-5. Identify: which tasks are you closest to SOTA?
-```
-
-### Phase 2: Reproduce SOTA (Day 2-3)
-
-**Goal:** Run known SOTA models to verify you can match published results.
-
-```
-1. Install and run ALIGNN on all structure tasks
-   - See Section 1 of this skill
-   - Focus on: matbench_perovskites, matbench_mp_e_form, matbench_mp_gap
-
-2. Install and run MODNet on all tasks
-   - See Section 2 of this skill
-   - MODNet is especially strong on: matbench_dielectric, matbench_glass, matbench_jdft2d
-
-3. Compare ALIGNN vs CGCNN vs MODNet per task
-4. Use evaluation-submission/ Script 3 for comparison charts
-```
-
-### Phase 3: Hyperparameter Sweep (Day 3-5)
-
-**Goal:** Find optimal configurations for your best model per task.
-
-```
-1. For each task, take the best model from Phase 2
-2. Run Script 4 (random search) with SEARCH_BUDGET=20
-3. Focus on tasks where you are closest to SOTA (highest impact)
-4. Key hyperparameters to sweep:
-   - learning_rate: 1e-5 to 1e-2 (log scale)
-   - hidden_dim: 64 to 512
-   - num_layers: 2 to 6
-   - batch_size: 32 to 256
-5. Use AMP (automatic mixed precision) for ~2x training speed:
-   scaler = torch.cuda.amp.GradScaler()
-   with torch.cuda.amp.autocast():
-       pred = model(batch)
-       loss = criterion(pred, batch.y)
-```
-
-### Phase 4: Ensemble (Day 5-6)
-
-**Goal:** Combine models for better accuracy. This alone often reaches top-5.
-
-```
-1. Multi-seed ensemble (Script 1):
-   - Take best config from Phase 3
-   - Train with 5 different seeds
-   - Average predictions
-   - Typical improvement: 5-15% MAE reduction
-
-2. Cross-architecture ensemble (Script 2):
-   - Combine top 2-3 model types per task
-   - Weight by validation performance
-   - Typical improvement: 10-20% over best single model
-
-3. Record all ensemble results
-4. Compare to leaderboard -- you should be competitive now
-```
-
-### Phase 5: Task-Specific Optimization (Day 7+)
-
-**Goal:** Targeted improvements for remaining gaps.
-
-```
-1. Small tasks (steels, jdft2d, phonons):
-   - Transfer learning from mp_e_form (Script 3)
-   - Data augmentation (perturbation of atomic positions)
-   - Feature engineering (Script 5)
-
-2. Composition tasks (expt_gap, dielectric, expt_is_metal, glass):
-   - Enhanced Magpie + extra features (oxidation states, ionic radii)
-   - MODNet with larger ensemble (n_models=10)
-   - Try CrabNet or Roost if available
-
-3. Large structure tasks (mp_gap, mp_e_form, mp_is_metal):
-   - Deeper GNNs (6-8 layers with residual connections)
-   - DimeNet++ or PaiNN for angular information
-   - Larger batch + longer training with cosine annealing
-
-4. Classification tasks (is_metal, glass):
-   - Threshold tuning on validation set
-   - Balanced loss weighting for class imbalance
-   - Calibration (temperature scaling)
-```
-
-## Key Parameters
-
-| Parameter | Description | Typical Range |
-|-----------|-------------|---------------|
-| n_ensemble | Number of models in ensemble | 3-10 |
-| ensemble_method | "mean" (regression) or "probability_mean" (classification) | -- |
-| frozen_layers | Layers to freeze in transfer learning (from end) | -2 to -4 |
-| fine_tune_lr | Learning rate for fine-tuning | 1e-6 to 1e-4 |
-| search_budget | Number of HP configs to try | 10-50 |
-| noise_std | Perturbation noise for augmentation | 0.01-0.05 |
-
-## Common Issues
+### Common Issues
 
 | Issue | Solution |
-|-------|---------|
-| Ensemble worse than best single model | Models too correlated; increase diversity (different seeds, architectures, or hyperparameters) |
-| Transfer learning degrades performance | Source and target tasks too dissimilar; try unfreezing more layers or using a smaller fine-tune LR |
-| Feature noise from handcrafted features | Use feature selection (mutual information, importance ranking) to remove noisy features |
-| GPU OOM for ensemble training | Train models sequentially, not in parallel; save checkpoints and load for prediction only |
-| Metric plateaus near noise floor | Some tasks have inherent noise; ensemble of 5+ diverse models is the best strategy at this point |
-| HP search too slow | Use shorter SHORT_EPOCHS (50-100); focus search on most impactful params (LR, hidden_dim) |
-| Validation score doesn't match test | Ensure validation split is representative; use stratified splits for classification tasks |
+|-------|----------|
+| One architecture dominates | Use learned weighting; it will down-weight weak models |
+| Architectures produce correlated errors | Add architecturally diverse models (e.g., message-passing + attention) |
+| Learned weighting overfits | Use val fold; reduce META_EPOCHS; add weight decay |
+| Very different prediction scales | Normalize predictions to zero mean / unit variance before combining |
+
+---
+
+## Script 3: Transfer Learning from Foundation Models
+
+Use pretrained materials science foundation models (MACE-MP-0, CHGNet, M3GNet) as feature extractors or for fine-tuning. Especially effective on small-data matbench tasks.
+
+### Key Parameters
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| `FOUNDATION_MODEL` | `"mace-mp-0"` | `"mace-mp-0"`, `"chgnet"`, or `"m3gnet"` |
+| `STRATEGY` | `"finetune_last_n"` | `"freeze_extract"`, `"finetune_last_n"`, `"full_finetune"` |
+| `N_UNFREEZE_LAYERS` | 3 | Layers to unfreeze from the end |
+| `HEAD_LR` | 1e-3 | Learning rate for new MLP head |
+| `BACKBONE_LR` | 1e-5 | Learning rate for unfrozen backbone layers |
+
+```python
+#!/opt/conda/envs/matbench/bin/python
+"""
+Transfer learning from materials science foundation models.
+Strategies:
+  1. freeze_extract: Freeze backbone, train MLP head only
+  2. finetune_last_n: Unfreeze last N layers with discriminative LR
+  3. full_finetune: Unfreeze all with very low backbone LR
+"""
+import os
+os.environ["MATBENCH_DATA_HOME"] = "/workspace/group/matbench/data"
+
+import json
+import numpy as np
+from datetime import datetime
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
+from matbench.bench import MatbenchBenchmark
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
+# Configuration
+TASK_NAME = "matbench_jdft2d"  # Small dataset benefits most from transfer learning
+FOUNDATION_MODEL = "mace-mp-0"  # "mace-mp-0", "chgnet", "m3gnet"
+STRATEGY = "finetune_last_n"    # "freeze_extract", "finetune_last_n", "full_finetune"
+N_UNFREEZE_LAYERS = 3
+HEAD_LR = 1e-3
+BACKBONE_LR = 1e-5
+EPOCHS = 200
+BATCH_SIZE = 32
+
+timestamp = datetime.now().strftime("%Y-%m-%d")
+out_dir = f"/workspace/group/matbench/experiments/{timestamp}_transfer_{FOUNDATION_MODEL}_{TASK_NAME}"
+os.makedirs(out_dir, exist_ok=True)
+
+CLASSIFICATION_TASKS = {"matbench_expt_is_metal", "matbench_glass", "matbench_mp_is_metal"}
+is_classification = TASK_NAME in CLASSIFICATION_TASKS
+
+
+def load_foundation_model(model_name):
+    """Load a pretrained foundation model."""
+    if model_name == "mace-mp-0":
+        # from mace.calculators import mace_mp
+        # model = mace_mp(model="medium", device=str(device))
+        # backbone = model.model  # extract the torch module
+        pass
+    elif model_name == "chgnet":
+        # from chgnet.model import CHGNet
+        # backbone = CHGNet.load().model
+        pass
+    elif model_name == "m3gnet":
+        # from matgl.ext.ase import M3GNetCalculator
+        # import matgl
+        # pot = matgl.load_model("M3GNet-MP-2021.2.8-PES")
+        # backbone = pot.model
+        pass
+    else:
+        raise ValueError(f"Unknown foundation model: {model_name}")
+    # return backbone
+    return None
+
+
+class TransferModel(nn.Module):
+    """Wraps a foundation model backbone with a task-specific MLP head."""
+
+    def __init__(self, backbone, feature_dim, output_dim=1, is_clf=False):
+        super().__init__()
+        self.backbone = backbone
+        self.head = nn.Sequential(
+            nn.Linear(feature_dim, 256),
+            nn.SiLU(),
+            nn.Dropout(0.1),
+            nn.Linear(256, 128),
+            nn.SiLU(),
+            nn.Dropout(0.1),
+            nn.Linear(128, output_dim),
+        )
+        self.is_clf = is_clf
+
+    def forward(self, batch):
+        # Extract features from backbone (model-specific)
+        features = self.backbone.extract_features(batch)  # shape: (batch, feature_dim)
+        out = self.head(features)
+        if self.is_clf:
+            out = torch.sigmoid(out)
+        return out.squeeze(-1)
+
+
+def setup_discriminative_lr(model, strategy, head_lr, backbone_lr, n_unfreeze):
+    """Configure parameter groups with discriminative learning rates."""
+    if strategy == "freeze_extract":
+        # Freeze entire backbone
+        for param in model.backbone.parameters():
+            param.requires_grad = False
+        param_groups = [{"params": model.head.parameters(), "lr": head_lr}]
+
+    elif strategy == "finetune_last_n":
+        # Freeze all backbone layers, then unfreeze last N
+        for param in model.backbone.parameters():
+            param.requires_grad = False
+
+        backbone_layers = list(model.backbone.children())
+        layers_to_unfreeze = backbone_layers[-n_unfreeze:]
+        for layer in layers_to_unfreeze:
+            for param in layer.parameters():
+                param.requires_grad = True
+
+        # Discriminative LR: backbone gets lower LR, head gets higher LR
+        unfrozen_backbone_params = [
+            p for layer in layers_to_unfreeze for p in layer.parameters() if p.requires_grad
+        ]
+        param_groups = [
+            {"params": unfrozen_backbone_params, "lr": backbone_lr},
+            {"params": model.head.parameters(), "lr": head_lr},
+        ]
+
+    elif strategy == "full_finetune":
+        # All parameters trainable, backbone at lower LR
+        param_groups = [
+            {"params": model.backbone.parameters(), "lr": backbone_lr},
+            {"params": model.head.parameters(), "lr": head_lr},
+        ]
+
+    return param_groups
+
+
+# --- Main training loop ---
+mb = MatbenchBenchmark(autoload=False, subset=[TASK_NAME])
+
+for task in mb.tasks:
+    task.load()
+    print(f"\nTask: {task.dataset_name}")
+    print(f"Foundation model: {FOUNDATION_MODEL}")
+    print(f"Strategy: {STRATEGY}")
+
+    for fold_idx in task.folds:
+        print(f"\nFold {fold_idx}")
+
+        train_inputs, train_outputs = task.get_train_and_val_data(fold_idx)
+        test_inputs = task.get_test_data(fold_idx, include_target=False)
+
+        # === USER: Implement actual model loading and training ===
+        # backbone = load_foundation_model(FOUNDATION_MODEL)
+        # model = TransferModel(backbone, feature_dim=128, is_clf=is_classification).to(device)
+        #
+        # param_groups = setup_discriminative_lr(
+        #     model, STRATEGY, HEAD_LR, BACKBONE_LR, N_UNFREEZE_LAYERS
+        # )
+        # optimizer = optim.AdamW(param_groups, weight_decay=1e-5)
+        # scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=50, T_mult=2)
+        #
+        # criterion = nn.BCELoss() if is_classification else nn.L1Loss()
+        #
+        # for epoch in range(EPOCHS):
+        #     model.train()
+        #     for batch in train_loader:
+        #         batch = batch.to(device)
+        #         optimizer.zero_grad()
+        #         pred = model(batch)
+        #         loss = criterion(pred, batch.y)
+        #         loss.backward()
+        #         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        #         optimizer.step()
+        #         scheduler.step(epoch + batch_idx / len(train_loader))
+        #
+        # model.eval()
+        # with torch.no_grad():
+        #     preds = model(test_data)
+        # task.record(fold_idx, preds.cpu().numpy())
+
+        print(f"  Fold {fold_idx} complete")
+
+print(f"\nResults saved to {out_dir}")
+```
+
+### Strategy Selection Guide
+
+| Dataset Size | Recommended Strategy | Notes |
+|-------------|---------------------|-------|
+| < 1000 samples | `freeze_extract` | Avoid overfitting the backbone |
+| 1000-10000 | `finetune_last_n` (N=2-4) | Best balance of adaptation and stability |
+| > 10000 | `full_finetune` | Enough data to adapt the full model |
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| Backbone features are poor | Try a different foundation model or increase `N_UNFREEZE_LAYERS` |
+| Fine-tuning destroys pretrained knowledge | Lower `BACKBONE_LR`; use warmup; freeze more layers |
+| Head overfits on small data | Add dropout; reduce head width; use weight decay |
+| Foundation model not installed | `pip install mace-torch` / `pip install chgnet` / `pip install matgl` |
+
+---
+
+## Script 4: Neural Architecture Search (Lightweight)
+
+GPU-accelerated random + Optuna-based hyperparameter optimization for deep learning models. Searches over hidden dimensions, number of layers, attention heads, dropout, activation functions, and learning rate schedules.
+
+### Key Parameters
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| `N_TRIALS` | 50 | Total Optuna trials |
+| `EPOCHS_PER_TRIAL` | 100 | Reduced epochs for faster search |
+| `PRUNING` | `True` | Early stop bad trials via MedianPruner |
+| `SEARCH_SPACE` | see below | Defines the hyperparameter ranges |
+
+```python
+#!/opt/conda/envs/matbench/bin/python
+"""
+Lightweight neural architecture search with Optuna.
+Searches over DL hyperparameters: hidden_dim, n_layers, n_heads, dropout,
+activation, learning rate, weight decay, scheduler.
+Uses GPU-accelerated trials with optional pruning.
+"""
+import os
+os.environ["MATBENCH_DATA_HOME"] = "/workspace/group/matbench/data"
+
+import json
+import numpy as np
+from datetime import datetime
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import optuna
+from optuna.pruners import MedianPruner
+from matbench.bench import MatbenchBenchmark
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
+# Configuration
+TASK_NAME = "matbench_mp_e_form"
+N_TRIALS = 50
+EPOCHS_PER_TRIAL = 100
+PRUNING = True
+
+timestamp = datetime.now().strftime("%Y-%m-%d")
+out_dir = f"/workspace/group/matbench/experiments/{timestamp}_nas_{TASK_NAME}"
+os.makedirs(out_dir, exist_ok=True)
+
+CLASSIFICATION_TASKS = {"matbench_expt_is_metal", "matbench_glass", "matbench_mp_is_metal"}
+is_classification = TASK_NAME in CLASSIFICATION_TASKS
+
+
+def build_model(trial):
+    """Build a model from Optuna-suggested hyperparameters."""
+    hidden_dim = trial.suggest_categorical("hidden_dim", [64, 128, 256, 512])
+    n_layers = trial.suggest_int("n_layers", 2, 6)
+    n_heads = trial.suggest_categorical("n_heads", [1, 2, 4, 8])
+    dropout = trial.suggest_float("dropout", 0.0, 0.5, step=0.05)
+    activation = trial.suggest_categorical("activation", ["ReLU", "SiLU", "GELU", "Mish"])
+
+    act_fn = getattr(nn, activation)()
+
+    # === USER: Replace with your actual GNN/transformer architecture ===
+    # Example: configurable MLP (replace with GNN for structure tasks)
+    layers = []
+    in_dim = 128  # feature dimension from your featurizer
+    for i in range(n_layers):
+        out_dim = hidden_dim if i < n_layers - 1 else 1
+        layers.append(nn.Linear(in_dim, out_dim))
+        if i < n_layers - 1:
+            layers.append(act_fn)
+            layers.append(nn.Dropout(dropout))
+        in_dim = hidden_dim
+
+    model = nn.Sequential(*layers).to(device)
+    return model
+
+
+def objective(trial):
+    """Single Optuna trial: build model, train, return validation metric."""
+    model = build_model(trial)
+
+    lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
+    weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
+    scheduler_type = trial.suggest_categorical("scheduler", ["cosine", "plateau", "step"])
+
+    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+
+    if scheduler_type == "cosine":
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS_PER_TRIAL)
+    elif scheduler_type == "plateau":
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.5)
+    elif scheduler_type == "step":
+        step_size = trial.suggest_int("step_size", 20, 80, step=10)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=0.5)
+
+    criterion = nn.BCELoss() if is_classification else nn.L1Loss()
+
+    # === USER: Replace with actual training loop ===
+    # for epoch in range(EPOCHS_PER_TRIAL):
+    #     model.train()
+    #     train_loss = 0
+    #     for batch in train_loader:
+    #         batch = batch.to(device)
+    #         optimizer.zero_grad()
+    #         pred = model(batch)
+    #         loss = criterion(pred, batch.y)
+    #         loss.backward()
+    #         optimizer.step()
+    #         train_loss += loss.item()
+    #
+    #     # Validation
+    #     model.eval()
+    #     with torch.no_grad():
+    #         val_metric = evaluate(model, val_loader)
+    #
+    #     if scheduler_type == "plateau":
+    #         scheduler.step(val_metric)
+    #     else:
+    #         scheduler.step()
+    #
+    #     # Report to Optuna for pruning
+    #     trial.report(val_metric, epoch)
+    #     if trial.should_prune():
+    #         raise optuna.TrialPruned()
+    #
+    # return val_metric  # minimize MAE or maximize AUC
+
+    return 0.0  # placeholder
+
+
+# Run the study
+pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=20) if PRUNING else None
+study = optuna.create_study(
+    direction="minimize",  # "maximize" for classification AUC
+    pruner=pruner,
+    study_name=f"nas_{TASK_NAME}",
+)
+# study.optimize(objective, n_trials=N_TRIALS, show_progress_bar=True)
+
+# Report best trial
+# print(f"\nBest trial:")
+# print(f"  Value: {study.best_trial.value:.6f}")
+# print(f"  Params: {study.best_trial.params}")
+#
+# # Save study results
+# results = {
+#     "best_value": study.best_trial.value,
+#     "best_params": study.best_trial.params,
+#     "all_trials": [
+#         {"number": t.number, "value": t.value, "params": t.params, "state": str(t.state)}
+#         for t in study.trials
+#     ],
+# }
+# with open(os.path.join(out_dir, "nas_results.json"), "w") as f:
+#     json.dump(results, f, indent=2)
+#
+# # Plot optimization history
+# fig = optuna.visualization.matplotlib.plot_optimization_history(study)
+# plt.savefig(os.path.join(out_dir, "optimization_history.png"), dpi=150, bbox_inches="tight")
+# plt.close()
+#
+# fig = optuna.visualization.matplotlib.plot_param_importances(study)
+# plt.savefig(os.path.join(out_dir, "param_importances.png"), dpi=150, bbox_inches="tight")
+# plt.close()
+
+print(f"\nNAS results saved to {out_dir}")
+```
+
+### Search Space Summary
+
+| Hyperparameter | Range | Scale |
+|---------------|-------|-------|
+| `hidden_dim` | {64, 128, 256, 512} | Categorical |
+| `n_layers` | 2 - 6 | Integer |
+| `n_heads` | {1, 2, 4, 8} | Categorical |
+| `dropout` | 0.0 - 0.5 | Step 0.05 |
+| `activation` | {ReLU, SiLU, GELU, Mish} | Categorical |
+| `lr` | 1e-5 - 1e-2 | Log-uniform |
+| `weight_decay` | 1e-6 - 1e-2 | Log-uniform |
+| `scheduler` | {cosine, plateau, step} | Categorical |
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| Trials OOM on GPU | Reduce max `hidden_dim` or `n_layers` in search space |
+| Too many pruned trials | Increase `n_warmup_steps` in MedianPruner |
+| Best params overfit | Validate best params on held-out fold; reduce `EPOCHS_PER_TRIAL` |
+| Optuna not installed | `pip install optuna optuna-dashboard` |
+
+---
+
+## Script 5: Advanced Training Tricks for SOTA
+
+Collection of advanced PyTorch training techniques that individually provide 1-5% improvement, and stack for significant cumulative gains.
+
+### Techniques Covered
+
+| Technique | Typical Gain | Best For |
+|-----------|-------------|----------|
+| Cosine Annealing + Warm Restarts | 2-5% | All tasks |
+| Stochastic Weight Averaging (SWA) | 2-4% | Regression tasks |
+| Exponential Moving Average (EMA) | 1-3% | Noisy training |
+| Label Smoothing | 1-3% | Classification tasks |
+| Mixup Augmentation | 2-5% | Small datasets |
+| Gradient Accumulation | Enables large batch | GPU memory limited |
+
+```python
+#!/opt/conda/envs/matbench/bin/python
+"""
+Advanced PyTorch training tricks for SOTA performance.
+Implements: cosine annealing, SWA, EMA, label smoothing, mixup,
+gradient accumulation -- all in one configurable training loop.
+"""
+import os
+os.environ["MATBENCH_DATA_HOME"] = "/workspace/group/matbench/data"
+
+import copy
+import json
+import numpy as np
+from datetime import datetime
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.optim.swa_utils import AveragedModel, SWALR
+from matbench.bench import MatbenchBenchmark
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
+# Configuration
+TASK_NAME = "matbench_mp_e_form"
+EPOCHS = 300
+LR = 1e-3
+BATCH_SIZE = 64
+
+# Toggle techniques
+USE_COSINE_ANNEALING = True
+USE_SWA = True
+SWA_START_EPOCH = 200       # Start SWA after this epoch
+SWA_LR = 5e-4               # SWA learning rate
+
+USE_EMA = True
+EMA_DECAY = 0.999            # EMA decay factor
+
+USE_LABEL_SMOOTHING = True   # For classification tasks only
+LABEL_SMOOTHING = 0.1
+
+USE_MIXUP = True
+MIXUP_ALPHA = 0.2            # Beta distribution parameter
+
+USE_GRAD_ACCUMULATION = True
+ACCUMULATION_STEPS = 4       # Effective batch = BATCH_SIZE * ACCUMULATION_STEPS
+
+timestamp = datetime.now().strftime("%Y-%m-%d")
+out_dir = f"/workspace/group/matbench/experiments/{timestamp}_advanced_tricks_{TASK_NAME}"
+os.makedirs(out_dir, exist_ok=True)
+
+CLASSIFICATION_TASKS = {"matbench_expt_is_metal", "matbench_glass", "matbench_mp_is_metal"}
+is_classification = TASK_NAME in CLASSIFICATION_TASKS
+
+
+# --- Exponential Moving Average ---
+class EMAModel:
+    """Maintains an exponential moving average of model parameters."""
+
+    def __init__(self, model, decay=0.999):
+        self.decay = decay
+        self.shadow = {}
+        self.backup = {}
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                self.shadow[name] = param.data.clone()
+
+    def update(self, model):
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                self.shadow[name].mul_(self.decay).add_(param.data, alpha=1 - self.decay)
+
+    def apply_shadow(self, model):
+        """Swap model params with EMA params for inference."""
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                self.backup[name] = param.data.clone()
+                param.data.copy_(self.shadow[name])
+
+    def restore(self, model):
+        """Restore original model params after inference."""
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                param.data.copy_(self.backup[name])
+
+
+# --- Mixup ---
+def mixup_data(x, y, alpha=0.2):
+    """Apply mixup augmentation to a batch."""
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1.0
+
+    batch_size = x.size(0)
+    index = torch.randperm(batch_size, device=x.device)
+
+    mixed_x = lam * x + (1 - lam) * x[index]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+
+def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    """Compute mixup loss."""
+    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
+
+
+# --- Main training loop with all tricks ---
+mb = MatbenchBenchmark(autoload=False, subset=[TASK_NAME])
+
+for task in mb.tasks:
+    task.load()
+    print(f"\nTask: {task.dataset_name}")
+    print(f"Techniques: cosine={USE_COSINE_ANNEALING}, SWA={USE_SWA}, "
+          f"EMA={USE_EMA}, mixup={USE_MIXUP}, grad_accum={USE_GRAD_ACCUMULATION}")
+
+    for fold_idx in task.folds:
+        print(f"\nFold {fold_idx}")
+
+        train_inputs, train_outputs = task.get_train_and_val_data(fold_idx)
+        test_inputs = task.get_test_data(fold_idx, include_target=False)
+
+        # === USER: Build your model and data loaders ===
+        # model = YourModel(...).to(device)
+        # train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+        # test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
+
+        # Optimizer
+        # optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-5)
+
+        # Cosine annealing with warm restarts
+        # if USE_COSINE_ANNEALING:
+        #     scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        #         optimizer, T_0=50, T_mult=2, eta_min=1e-6
+        #     )
+
+        # SWA model
+        # if USE_SWA:
+        #     swa_model = AveragedModel(model).to(device)
+        #     swa_scheduler = SWALR(optimizer, swa_lr=SWA_LR)
+
+        # EMA
+        # if USE_EMA:
+        #     ema = EMAModel(model, decay=EMA_DECAY)
+
+        # Loss function
+        # if is_classification and USE_LABEL_SMOOTHING:
+        #     criterion = nn.BCEWithLogitsLoss(
+        #         # Label smoothing via soft targets
+        #     )
+        # elif is_classification:
+        #     criterion = nn.BCEWithLogitsLoss()
+        # else:
+        #     criterion = nn.L1Loss()  # MAE for regression
+
+        # === Training loop ===
+        # for epoch in range(EPOCHS):
+        #     model.train()
+        #     optimizer.zero_grad()
+        #
+        #     for batch_idx, batch in enumerate(train_loader):
+        #         batch = batch.to(device)
+        #
+        #         # Mixup augmentation
+        #         if USE_MIXUP and not is_classification:
+        #             mixed_x, y_a, y_b, lam = mixup_data(batch.x, batch.y, MIXUP_ALPHA)
+        #             pred = model(mixed_x)
+        #             loss = mixup_criterion(criterion, pred, y_a, y_b, lam)
+        #         else:
+        #             pred = model(batch)
+        #             # Label smoothing for classification
+        #             if is_classification and USE_LABEL_SMOOTHING:
+        #                 smooth_y = batch.y * (1 - LABEL_SMOOTHING) + 0.5 * LABEL_SMOOTHING
+        #                 loss = criterion(pred, smooth_y)
+        #             else:
+        #                 loss = criterion(pred, batch.y)
+        #
+        #         # Gradient accumulation
+        #         if USE_GRAD_ACCUMULATION:
+        #             loss = loss / ACCUMULATION_STEPS
+        #
+        #         loss.backward()
+        #
+        #         if USE_GRAD_ACCUMULATION:
+        #             if (batch_idx + 1) % ACCUMULATION_STEPS == 0:
+        #                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        #                 optimizer.step()
+        #                 optimizer.zero_grad()
+        #         else:
+        #             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        #             optimizer.step()
+        #             optimizer.zero_grad()
+        #
+        #     # Scheduler step
+        #     if USE_SWA and epoch >= SWA_START_EPOCH:
+        #         swa_model.update_parameters(model)
+        #         swa_scheduler.step()
+        #     elif USE_COSINE_ANNEALING:
+        #         scheduler.step()
+        #
+        #     # EMA update
+        #     if USE_EMA:
+        #         ema.update(model)
+        #
+        #     if epoch % 50 == 0:
+        #         print(f"    Epoch {epoch}, loss: {loss.item():.4f}")
+
+        # === Prediction: choose best model variant ===
+        # model.eval()
+        #
+        # # SWA: update batch norm statistics
+        # if USE_SWA:
+        #     torch.optim.swa_utils.update_bn(train_loader, swa_model, device=device)
+        #     swa_model.eval()
+        #     with torch.no_grad():
+        #         swa_preds = swa_model(test_data)
+        #
+        # # EMA prediction
+        # if USE_EMA:
+        #     ema.apply_shadow(model)
+        #     with torch.no_grad():
+        #         ema_preds = model(test_data)
+        #     ema.restore(model)
+        #
+        # # Regular model prediction
+        # with torch.no_grad():
+        #     base_preds = model(test_data)
+        #
+        # # Average SWA, EMA, and base predictions for best result
+        # final_preds = (swa_preds + ema_preds + base_preds) / 3
+        # task.record(fold_idx, final_preds.cpu().numpy())
+
+        print(f"  Fold {fold_idx} complete")
+
+print(f"\nResults saved to {out_dir}")
+```
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| SWA degrades performance | Start SWA later (after LR has decayed); tune `SWA_LR` |
+| Mixup hurts on very small datasets | Reduce `MIXUP_ALPHA` to 0.1 or disable |
+| EMA too aggressive | Increase `EMA_DECAY` closer to 1.0 (e.g., 0.9999) |
+| Gradient accumulation wrong loss scale | Ensure `loss / ACCUMULATION_STEPS` before `.backward()` |
+| Cosine schedule restarts too frequent | Increase `T_0` or `T_mult` |
+| Label smoothing on regression | Not applicable; only use for classification tasks |
+
+---
+
+## Section 6: Complete SOTA Strategy Roadmap
+
+A phased plan for systematically achieving top matbench leaderboard positions using deep learning.
+
+### Phase 1: Study Reference Repos (1-2 days)
+
+1. **Review the reference library** (`reference-library/SKILL.md`) for SOTA model repos
+2. Identify the top 3 architectures for your target task category:
+   - Structure-based: MACE, DimeNet++, CGCNN, MEGNet, SchNet
+   - Composition-based: Roost, CrabNet, ElemNet
+3. Read their papers, note training details: LR, scheduler, epochs, data splits
+4. Check if pretrained weights are available
+
+### Phase 2: Baseline with Best Known Architecture (2-3 days)
+
+1. Implement the highest-performing known architecture for your task
+2. Use the **exact** hyperparameters from the original paper
+3. Run full 5-fold matbench evaluation
+4. Record baseline MAE/AUC -- this is your reference point
+5. Verify reproducibility: run twice, check consistency
+
+### Phase 3: Hyperparameter Optimization (2-3 days)
+
+1. Run **Script 4** (Optuna NAS) to search over:
+   - Model architecture params (hidden_dim, n_layers, n_heads, dropout)
+   - Training params (LR, weight_decay, scheduler type)
+2. Use fold 0 for initial search (fast iteration)
+3. Validate top-3 configs across all 5 folds
+4. Expected improvement: 5-15% over paper defaults
+
+### Phase 4: Ensemble + Advanced Tricks (2-3 days)
+
+1. Apply **Script 5** (advanced tricks) to the optimized architecture:
+   - SWA + EMA typically give 2-5% improvement
+   - Cosine annealing with warm restarts for stable convergence
+   - Mixup for small-data tasks
+2. Run **Script 1** (multi-seed ensemble) with 5 seeds: ~5-10% improvement
+3. Run **Script 2** (cross-architecture ensemble) combining top 2-3 architectures
+4. If structure data available, apply **Script 3** (transfer learning) with MACE-MP-0
+
+### Phase 5: Submit and Compare (1 day)
+
+1. Generate final `results.json` from matbench benchmark
+2. Compare against leaderboard at [matbench leaderboard](https://matbench.materialsproject.org/)
+3. Record all hyperparameters, ensemble configs, and training details
+4. Save the full experiment log:
+
+```
+/workspace/group/matbench/experiments/
+  YYYY-MM-DD_sota_attempt_taskname/
+    results.json            # matbench official results
+    config.yaml             # all hyperparameters
+    training_log.csv        # epoch-by-epoch metrics
+    model_checkpoints/      # saved .pt files
+    plots/                  # learning curves, parity plots
+    README.md               # human-readable experiment summary
+```
+
+### Expected Cumulative Improvement
+
+| Stage | Typical Improvement | Running Total |
+|-------|-------------------|---------------|
+| Paper baseline | -- | 100% (reference) |
+| Hyperparameter opt | 5-15% | 85-95% of baseline error |
+| SWA + EMA | 2-5% | 80-93% |
+| Multi-seed ensemble (5x) | 5-10% | 72-88% |
+| Cross-arch ensemble | 3-8% | 66-85% |
+| Transfer learning | 2-10% (task dependent) | 60-83% |
+
+Note: percentages are multiplicative error reduction; actual gains vary by task and how close the baseline is to the theoretical floor.

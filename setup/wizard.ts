@@ -20,6 +20,7 @@ import {
   stepHeader, stepFooter, ok, warn, fail, info,
 } from './ui.js';
 import { type Locale, setLocale, getLocale, t } from './i18n.js';
+import { hasCodexAuthFile } from '../src/env.js';
 
 // ── Utility ─────────────────────────────────────────────────────────────────
 
@@ -231,10 +232,14 @@ async function step4(): Promise<void> {
   stepHeader(4, TOTAL_STEPS, t('step.api'));
 
   const envFile = path.join(process.cwd(), '.env');
-  let configured = false;
+  let configured = hasCodexAuthFile();
   if (fs.existsSync(envFile)) {
     const txt = fs.readFileSync(envFile, 'utf-8');
-    configured = /^(ANTHROPIC_API_KEY|OPENAI_API_KEY|CLAUDE_CODE_OAUTH_TOKEN)=/m.test(txt);
+    configured =
+      configured ||
+      /^(ANTHROPIC_API_KEY|OPENAI_API_KEY|CODEX_API_KEY|CLAUDE_CODE_OAUTH_TOKEN)=/m.test(
+        txt,
+      );
   }
 
   if (configured) {

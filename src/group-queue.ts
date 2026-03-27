@@ -2,7 +2,7 @@ import { ChildProcess } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-import { DATA_DIR, MAX_CONCURRENT_CONTAINERS } from './config.js';
+import { AGENT_ENGINE, DATA_DIR, MAX_CONCURRENT_CONTAINERS } from './config.js';
 import { readEnvFile } from './env.js';
 import { logger } from './logger.js';
 
@@ -167,18 +167,21 @@ export class GroupQueue {
    * clearing stale keys/base URLs from a previous auth mode or provider.
    */
   private writeSecrets(groupFolder: string): void {
-    const secrets = readEnvFile([
-      'AGENT_ENGINE',
-      'AGENT_MODEL',
-      'CLAUDE_CODE_OAUTH_TOKEN',
-      'ANTHROPIC_API_KEY',
-      'ANTHROPIC_BASE_URL',
-      'CODEX_API_KEY',
-      'OPENAI_API_KEY',
-      'OPENAI_BASE_URL',
-      'CODEX_MODEL',
-      'GOOGLE_API_KEY',
-    ]);
+    const engine = readEnvFile(['AGENT_ENGINE']).AGENT_ENGINE || AGENT_ENGINE;
+    const commonKeys = ['AGENT_ENGINE', 'AGENT_MODEL'];
+    const engineKeys =
+      engine === 'claude'
+        ? ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL']
+        : engine === 'gemini'
+          ? ['GOOGLE_API_KEY']
+          : [
+              'CODEX_API_KEY',
+              'OPENAI_API_KEY',
+              'OPENAI_BASE_URL',
+              'CODEX_MODEL',
+              'CODEX_REASONING_EFFORT',
+            ];
+    const secrets = readEnvFile([...commonKeys, ...engineKeys]);
     if (Object.keys(secrets).length === 0) return;
 
     const ipcDir = path.join(DATA_DIR, 'ipc', groupFolder);

@@ -40,28 +40,26 @@ torch.backends.cudnn.benchmark = True
 ## Method Selection
 
 ```
-Start here: Which GNN architecture?
+Start here: What is the goal?
 │
-├─ First attempt / baseline?
-│  └─ → CGCNN (Script 2)
-│     Fast training, good accuracy, easiest to tune
+├─ Want to BEAT SOTA? ← Most common request
+│  └─ These basic GNNs (CGCNN/SchNet/DimeNet++) are NOT sufficient for SOTA.
+│     MANDATORY: Study advanced architectures in reference repos first:
+│     • /workspace/group/matbench/reference/repos/fairchem-ocp/ (EquiformerV2, eSCN)
+│     • /workspace/group/matbench/reference/repos/mace/ (MACE, equivariant MP)
+│     • /workspace/group/matbench/reference/repos/nequip/ (E(3)-equivariant)
+│     • /workspace/group/matbench/reference/repos/equiformer/ (graph transformer)
+│     • /workspace/group/matbench/reference/repos/kgcnn/ (coGN/coNGN — current SOTA)
+│     Then DESIGN a novel architecture combining ideas from these.
+│     Use Scripts 1-5 below ONLY as starting scaffolds to build upon.
 │
-├─ Want better accuracy, OK with slower training?
-│  ├─ Dataset > 10k samples?
-│  │  └─ → SchNet (Script 3)
-│  │     Continuous filter convolutions, good scalability
-│  │
-│  └─ Dataset < 10k samples?
-│     └─ → DimeNet++ (Script 4)
-│        Best on small structure tasks, captures angles
+├─ Quick baseline or explicit "traditional GNN" request?
+│  ├─ First attempt → CGCNN (Script 2)
+│  ├─ Better accuracy → SchNet (Script 3) or DimeNet++ (Script 4)
+│  └─ Custom architecture → Template (Script 5)
 │
-├─ Want to experiment with custom message passing?
-│  └─ → Custom GNN Template (Script 5)
-│     Minimal MessagePassing scaffold to modify
-│
-└─ Unsure about graph construction?
+└─ Need to understand graph construction first?
    └─ → Crystal Graph Construction (Script 1)
-      Understand radius, neighbors, edge features first
 ```
 
 ## Prerequisites

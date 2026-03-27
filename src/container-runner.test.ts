@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
+import fs from 'fs';
 
 // Sentinel markers must match container-runner.ts
 const OUTPUT_START_MARKER = '---MATCLAW_OUTPUT_START---';
@@ -8,6 +9,8 @@ const OUTPUT_END_MARKER = '---MATCLAW_OUTPUT_END---';
 
 // Mock config
 vi.mock('./config.js', () => ({
+  AGENT_ENGINE: 'codex',
+  AGENT_MODEL: '',
   CONTAINER_IMAGE: 'matclaw-agent:latest',
   CONTAINER_IMAGE_REMOTE: 'ghcr.io/dingyanglyu/matclaw-agent:latest',
   CONTAINER_GPU: false,
@@ -29,6 +32,11 @@ vi.mock('./logger.js', () => ({
   },
 }));
 
+vi.mock('./env.js', () => ({
+  getCodexAuthFilePath: vi.fn(() => '/root/.codex/auth.json'),
+  readEnvFile: vi.fn(() => ({})),
+}));
+
 // Mock fs
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof import('fs')>('fs');
@@ -38,11 +46,13 @@ vi.mock('fs', async () => {
       ...actual,
       existsSync: vi.fn(() => false),
       mkdirSync: vi.fn(),
+      chmodSync: vi.fn(),
       writeFileSync: vi.fn(),
       readFileSync: vi.fn(() => ''),
       readdirSync: vi.fn(() => []),
       statSync: vi.fn(() => ({ isDirectory: () => false })),
       copyFileSync: vi.fn(),
+      createWriteStream: vi.fn(() => new PassThrough()),
     },
   };
 });
@@ -116,6 +126,7 @@ describe('container-runner timeout behavior', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     fakeProc = createFakeProcess();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -207,5 +218,66 @@ describe('container-runner timeout behavior', () => {
     const result = await resultPromise;
     expect(result.status).toBe('success');
     expect(result.newSessionId).toBe('session-456');
+  });
+
+  it('copies Codex auth into the group mount with writable permissions', async () => {
+    const authPath = '/root/.codex/auth.json';
+    const groupAuthPath =
+      '/tmp/matclaw-test-data/sessions/test-group/.codex/auth.json';
+
+    vi.mocked(fs.existsSync).mockImplementation(
+      (filePath) => filePath === authPath,
+    );
+    vi.mocked(fs.readFileSync).mockImplementation((filePath) =>
+      filePath === authPath ? 'auth-data' : '',
+    );
+
+    const onOutput = vi.fn(async () => {});
+    const resultPromise = runContainerAgent(
+      testGroup,
+      testInput,
+      () => {},
+      onOutput,
+    );
+
+    emitOutputMarker(fakeProc, {
+      status: 'success',
+      result: 'Done',
+      newSessionId: 'session-auth',
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    fakeProc.emit('close', 0);
+    await vi.advanceTimersByTimeAsync(10);
+
+    const result = await resultPromise;
+    expect(result.status).toBe('success');
+    expect(fs.readFileSync).toHaveBeenCalledWith(authPath);
+    expect(fs.writeFileSync).toHaveBeenCalledWith(groupAuthPath, 'auth-data');
+    expect(fs.chmodSync).toHaveBeenCalledWith(groupAuthPath, 0o666);
+  });
+
+  it('returns the structured agent error when stdout and stderr are empty', async () => {
+    const onOutput = vi.fn(async () => {});
+    const resultPromise = runContainerAgent(
+      testGroup,
+      testInput,
+      () => {},
+      onOutput,
+    );
+
+    emitOutputMarker(fakeProc, {
+      status: 'error',
+      result: null,
+      error: 'Codex Exec exited with code 1: Permission denied (os error 13)\n',
+      newSessionId: 'session-error',
+    });
+
+    await vi.advanceTimersByTimeAsync(10);
+    fakeProc.emit('close', 1);
+    await vi.advanceTimersByTimeAsync(10);
+
+    const result = await resultPromise;
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('Permission denied (os error 13)');
   });
 });

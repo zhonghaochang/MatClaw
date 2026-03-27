@@ -56,19 +56,30 @@ If a dataset is missing (e.g., you only ran a subset before), matbench will auto
 ## Method Decision Guide
 
 ```
-What do you want to reproduce?
+What does the user want?
 
-Model already installed in matbench env?
-  chgnet, matgl, tpot, kgcnn → Use directly (Section 1)
-
-Model needs isolated environment?
-  ALIGNN (needs torch<=2.2 + dgl) → Create conda env (Section 2)
-  MODNet (needs TensorFlow)       → Create conda env (Section 2)
-  CrabNet (needs Python<3.11)     → Create conda env (Section 2)
-  DeeperGATGNN (2021-era deps)    → Create conda env (Section 2)
-
-Unknown model from a paper/repo?
-  → Section 3: Full reproduction workflow
+├─ DESIGN a novel architecture to beat SOTA? (MOST IMPORTANT)
+│  └─ Step 1: Study 3-5 reference repos most relevant to your task
+│     (see /workspace/group/matbench/reference/repos/ for 51 repos)
+│     (read reference-library/SKILL.md for the full index)
+│  └─ Step 2: Identify key innovations from each:
+│     - Equivariant message passing (MACE, NequIP, PaiNN)
+│     - Attention mechanisms (Equiformer, CrabNet)
+│     - Multi-scale interactions (coGN, coNGN)
+│     - Pre-training + fine-tuning (MACE-MP-0, CHGNet)
+│  └─ Step 3: Design a NEW architecture combining these innovations
+│     Goal: publishable novelty (NeurIPS/ICML/ICLR level)
+│  └─ Step 4: Implement from scratch in PyTorch + torch-geometric + e3nn
+│  └─ Step 5: Train with full A100 optimization (see training-pipeline/)
+│  └─ Step 6: Ensemble 3-5 seeds for final submission
+│
+├─ Reproduce an existing SOTA model exactly?
+│  ├─ Model in matbench env? (chgnet, matgl, kgcnn) → Section 1
+│  ├─ Needs isolated env? (ALIGNN, MODNet, CrabNet) → Section 2
+│  └─ Unknown model from paper/repo? → Section 3
+│
+└─ Optimize/fine-tune an existing model?
+   └─ See model-optimization/ skill
 ```
 
 ## Pre-installed SOTA Packages (matbench env)

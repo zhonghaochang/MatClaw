@@ -3,6 +3,12 @@ import os from 'os';
 import path from 'path';
 import { logger } from './logger.js';
 
+const CLAUDE_AUTH_KEYS = new Set([
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_BASE_URL',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+]);
+
 /**
  * Parse the .env file and return values for the requested keys.
  * Does NOT load anything into process.env — callers decide what to
@@ -39,25 +45,43 @@ export function readEnvFile(keys: string[]): Record<string, string> {
     if (value) result[key] = value;
   }
 
-  // Fallback: if no API key or OAuth token configured, try reading
-  // from Claude Code's credentials file (~/.claude/.credentials.json).
-  // This lets developers use their Claude Max/Pro subscription without
-  // manually copying tokens, while distributed users just set API keys.
-  // Check the raw file content (not just the result) — callers may not
-  // request ANTHROPIC_API_KEY but it could still be set in .env.
-  const hasApiKey =
-    result.ANTHROPIC_API_KEY || /^ANTHROPIC_API_KEY=.+/m.test(content);
-  const hasOAuthToken =
-    result.CLAUDE_CODE_OAUTH_TOKEN ||
-    /^CLAUDE_CODE_OAUTH_TOKEN=.+/m.test(content);
-  if (!hasApiKey && !hasOAuthToken) {
-    const token = readClaudeOAuthToken();
-    if (token) {
-      result.CLAUDE_CODE_OAUTH_TOKEN = token;
+  // Claude OAuth fallback is only relevant for callers that actually request
+  // Claude auth-related keys. This avoids surprising side effects in generic
+  // config reads now that Codex is the default engine.
+  const wantsClaudeAuth = keys.some((key) => CLAUDE_AUTH_KEYS.has(key));
+  if (wantsClaudeAuth) {
+    // Check the raw file content (not just the result) — callers may not
+    // request ANTHROPIC_API_KEY but it could still be set in .env.
+    const hasApiKey =
+      result.ANTHROPIC_API_KEY || /^ANTHROPIC_API_KEY=.+/m.test(content);
+    const hasOAuthToken =
+      result.CLAUDE_CODE_OAUTH_TOKEN ||
+      /^CLAUDE_CODE_OAUTH_TOKEN=.+/m.test(content);
+    if (!hasApiKey && !hasOAuthToken) {
+      const token = readClaudeOAuthToken();
+      if (token) {
+        result.CLAUDE_CODE_OAUTH_TOKEN = token;
+      }
     }
   }
 
   return result;
+}
+
+export function getCodexHomeDir(): string {
+  return process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+}
+
+export function getCodexAuthFilePath(): string {
+  return path.join(getCodexHomeDir(), 'auth.json');
+}
+
+export function hasCodexAuthFile(): boolean {
+  try {
+    return fs.existsSync(getCodexAuthFilePath());
+  } catch {
+    return false;
+  }
 }
 
 /**

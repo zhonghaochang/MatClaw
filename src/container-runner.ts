@@ -19,7 +19,7 @@ import {
   IDLE_TIMEOUT,
   TIMEZONE,
 } from './config.js';
-import { readEnvFile } from './env.js';
+import { getCodexAuthFilePath, readEnvFile } from './env.js';
 import { resolveGroupFolderPath, resolveGroupIpcPath } from './group-folder.js';
 import { logger } from './logger.js';
 import {
@@ -72,6 +72,37 @@ function mkdirWorld(dirPath: string): void {
   } catch {
     /* best-effort */
   }
+}
+
+function writeFileWithMode(
+  filePath: string,
+  contents: string | NodeJS.ArrayBufferView,
+  mode: number,
+): void {
+  fs.writeFileSync(filePath, contents);
+  try {
+    fs.chmodSync(filePath, mode);
+  } catch {
+    /* best-effort */
+  }
+}
+
+/**
+ * Copy Codex OAuth credentials into the group-scoped mount with permissive
+ * mode bits so the container's non-root user can both read the token and
+ * refresh it in place on root-squashed/network filesystems.
+ */
+function copyCodexAuthForContainer(srcPath: string, destPath: string): void {
+  writeFileWithMode(destPath, fs.readFileSync(srcPath), 0o666);
+}
+
+/**
+ * Sync refreshed Codex OAuth credentials back to the host cache while keeping
+ * the host-side file private.
+ */
+function syncCodexAuthToHost(srcPath: string, destPath: string): void {
+  fs.mkdirSync(path.dirname(destPath), { recursive: true });
+  writeFileWithMode(destPath, fs.readFileSync(srcPath), 0o600);
 }
 
 function buildVolumeMounts(
@@ -193,7 +224,7 @@ function buildVolumeMounts(
   // Codex OAuth credentials (from `codex login` on host)
   // Mounted read-only so the Codex CLI can authenticate without an API key.
   // The CodexEngine writes config.toml separately for MCP server config.
-  const codexAuthFile = path.join(homeDir, '.codex', 'auth.json');
+  const codexAuthFile = getCodexAuthFilePath();
   if (fs.existsSync(codexAuthFile)) {
     // Ensure the target directory exists in the container's codex home
     const groupCodexDir = path.join(
@@ -204,7 +235,10 @@ function buildVolumeMounts(
     );
     mkdirWorld(groupCodexDir);
     // Copy auth.json so it coexists with engine-generated config.toml
-    fs.copyFileSync(codexAuthFile, path.join(groupCodexDir, 'auth.json'));
+    copyCodexAuthForContainer(
+      codexAuthFile,
+      path.join(groupCodexDir, 'auth.json'),
+    );
     mounts.push({
       hostPath: groupCodexDir,
       containerPath: '/home/node/.codex',
@@ -286,26 +320,42 @@ function buildVolumeMounts(
   return mounts;
 }
 
+function secretKeysForEngine(engine: string): string[] {
+  const sharedKeys = ['MP_API_KEY'];
+
+  switch (engine) {
+    case 'claude':
+      return [
+        'CLAUDE_CODE_OAUTH_TOKEN',
+        'ANTHROPIC_API_KEY',
+        'ANTHROPIC_BASE_URL',
+        ...sharedKeys,
+      ];
+    case 'gemini':
+      return ['GOOGLE_API_KEY', ...sharedKeys];
+    case 'codex':
+    default:
+      return [
+        'CODEX_API_KEY',
+        'OPENAI_API_KEY',
+        'OPENAI_BASE_URL',
+        'CODEX_MODEL',
+        'CODEX_REASONING_EFFORT',
+        ...sharedKeys,
+      ];
+  }
+}
+
 /**
  * Read allowed secrets from .env for passing to the container via stdin.
  * Secrets are never written to disk or mounted as files.
  */
 function readSecrets(): Record<string, string> {
-  return readEnvFile([
-    // Claude Agent SDK
-    'CLAUDE_CODE_OAUTH_TOKEN',
-    'ANTHROPIC_API_KEY',
-    'ANTHROPIC_BASE_URL',
-    // Codex SDK (OpenAI-compatible)
-    'CODEX_API_KEY',
-    'OPENAI_API_KEY',
-    'OPENAI_BASE_URL',
-    'CODEX_MODEL',
-    // Gemini
-    'GOOGLE_API_KEY',
-    // Shared
-    'MP_API_KEY',
-  ]);
+  return readEnvFile(secretKeysForEngine(readRuntimeAgentEngine()));
+}
+
+function readRuntimeAgentEngine(): string {
+  return readEnvFile(['AGENT_ENGINE']).AGENT_ENGINE || AGENT_ENGINE;
 }
 
 function buildContainerArgs(
@@ -472,6 +522,7 @@ export async function runContainerAgent(
     // Streaming output: parse OUTPUT_START/END marker pairs as they arrive
     let parseBuffer = '';
     let newSessionId: string | undefined;
+    let lastStructuredOutput: ContainerOutput | undefined;
     let outputChain = Promise.resolve();
 
     // Fallback: poll IPC output files when Docker stdout piping is broken
@@ -493,6 +544,7 @@ export async function runContainerAgent(
               fs.readFileSync(filePath, 'utf-8'),
             );
             fs.unlinkSync(filePath);
+            lastStructuredOutput = parsed;
             if (parsed.newSessionId) {
               newSessionId = parsed.newSessionId;
             }
@@ -571,6 +623,7 @@ export async function runContainerAgent(
 
           try {
             const parsed: ContainerOutput = JSON.parse(jsonStr);
+            lastStructuredOutput = parsed;
             if (parsed.newSessionId) {
               newSessionId = parsed.newSessionId;
             }
@@ -682,6 +735,7 @@ export async function runContainerAgent(
               fs.readFileSync(filePath, 'utf-8'),
             );
             fs.unlinkSync(filePath);
+            lastStructuredOutput = parsed;
             if (parsed.newSessionId) newSessionId = parsed.newSessionId;
             hadStreamingOutput = true;
             if (onOutput) {
@@ -703,8 +757,8 @@ export async function runContainerAgent(
       // Sync Codex OAuth token back to host after container exits.
       // The Codex CLI may have refreshed the token during a long-running session;
       // writing it back ensures the host's auth.json stays fresh for next run.
-      if (AGENT_ENGINE === 'codex') {
-        const hostAuthFile = path.join(os.homedir(), '.codex', 'auth.json');
+      if (readRuntimeAgentEngine() === 'codex') {
+        const hostAuthFile = getCodexAuthFilePath();
         const groupAuthFile = path.join(
           DATA_DIR,
           'sessions',
@@ -719,8 +773,7 @@ export async function runContainerAgent(
               : 0;
             const groupStat = fs.statSync(groupAuthFile).mtimeMs;
             if (groupStat > hostStat) {
-              fs.mkdirSync(path.dirname(hostAuthFile), { recursive: true });
-              fs.copyFileSync(groupAuthFile, hostAuthFile);
+              syncCodexAuthToHost(groupAuthFile, hostAuthFile);
               logger.info('Synced refreshed Codex OAuth token back to host');
             }
           }
@@ -817,6 +870,9 @@ export async function runContainerAgent(
           `=== Input ===`,
           JSON.stringify(input, null, 2),
           ``,
+          `=== Last Structured Output ===`,
+          JSON.stringify(lastStructuredOutput, null, 2),
+          ``,
           `=== Container Args ===`,
           containerArgs.join(' '),
           ``,
@@ -862,6 +918,16 @@ export async function runContainerAgent(
           );
           // Fall through to success handling below
         } else {
+          const structuredError =
+            lastStructuredOutput?.status === 'error'
+              ? lastStructuredOutput.error?.trim()
+              : undefined;
+          const exitDetail =
+            structuredError || stderr.trim() || stdout.trim() || undefined;
+          const errorMessage = exitDetail
+            ? `Container exited with code ${code}: ${exitDetail}`
+            : `Container exited with code ${code}`;
+
           logger.error(
             {
               group: group.name,
@@ -869,6 +935,7 @@ export async function runContainerAgent(
               duration,
               stderr,
               stdout,
+              structuredError,
               logFile,
             },
             'Container exited with error',
@@ -877,7 +944,7 @@ export async function runContainerAgent(
           resolve({
             status: 'error',
             result: null,
-            error: `Container exited with code ${code}: ${stderr.slice(-200)}`,
+            error: errorMessage,
           });
           return;
         }

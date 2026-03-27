@@ -12,7 +12,7 @@ import path from 'path';
 import Database from 'better-sqlite3';
 
 import { STORE_DIR } from '../src/config.js';
-import { readEnvFile } from '../src/env.js';
+import { hasCodexAuthFile, readEnvFile } from '../src/env.js';
 import { logger } from '../src/logger.js';
 import {
   getPlatform,
@@ -99,9 +99,16 @@ export async function run(_args: string[]): Promise<void> {
   // 3. Check credentials
   let credentials = 'missing';
   const envFile = path.join(projectRoot, '.env');
+  if (hasCodexAuthFile()) {
+    credentials = 'configured';
+  }
   if (fs.existsSync(envFile)) {
     const envContent = fs.readFileSync(envFile, 'utf-8');
-    if (/^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY)=/m.test(envContent)) {
+    if (
+      /^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY|OPENAI_API_KEY|CODEX_API_KEY)=/m.test(
+        envContent,
+      )
+    ) {
       credentials = 'configured';
     }
   }

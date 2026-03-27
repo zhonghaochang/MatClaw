@@ -1,100 +1,24 @@
 # Train MatBench Models with GPU and Advanced Scheduling
 
-## A100 GPU Optimization (MANDATORY — READ FIRST)
+## A100 GPU Optimization
 
-**The A100-SXM4-80GB has 80 GB VRAM but previous runs only used 3-6 GB (< 8%). This section fixes that.**
+**→ See `auto-tournament/SKILL.md` section "MANDATORY: A100 GPU Utilization Rules" for the complete, authoritative GPU optimization guide (batch size table, DataLoader settings, AMP, TF32, parallel training, monitoring).**
 
-### Root Causes of Low GPU Utilization
-
-| Problem | Impact | Found In Previous Runs |
-|---------|--------|----------------------|
-| **batch_size=32 on A100** | GPU idle 90%+ of the time waiting for tiny batches | CGCNN: jdft2d=32, phonons=32 |
-| **num_workers=0** | Data loading runs on main thread, GPU waits for CPU | All DataLoaders |
-| **pin_memory=False** | CPU→GPU memory transfer not optimized | All DataLoaders |
-| **No data prefetching** | GPU idle during data preparation | All scripts |
-| **Small models (256 hidden)** | Model doesn't saturate GPU compute | All models |
-
-### Mandatory DataLoader Configuration for A100
-
-**EVERY DataLoader in EVERY training script MUST use these settings:**
+Quick summary — every training script MUST have:
 
 ```python
-# ❌ WRONG — wastes 90% of A100
-loader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=0, pin_memory=False)
+# 1. TF32 + cuDNN
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cudnn.benchmark = True
 
-# ✅ CORRECT — full A100 utilization
-loader = DataLoader(
-    dataset,
-    batch_size=BATCH_SIZE,      # See batch size table below
-    shuffle=True,
-    num_workers=4,              # 4 parallel data loading workers
-    pin_memory=True,            # Pin CPU memory for fast GPU transfer
-    persistent_workers=True,    # Keep workers alive between epochs
-    prefetch_factor=2,          # Pre-load 2 batches ahead
-)
-```
+# 2. Large batch + workers
+DataLoader(dataset, batch_size=256+, num_workers=4, pin_memory=True, persistent_workers=True)
 
-### Recommended Batch Sizes for A100 80GB
-
-| Dataset Size | Model Type | Recommended batch_size | Expected VRAM Usage |
-|-------------|-----------|----------------------|-------------------|
-| < 1,000 | GNN (CGCNN, SchNet) | 128-256 | 10-20 GB |
-| 1,000 - 10,000 | GNN | 256-512 | 15-30 GB |
-| 10,000 - 50,000 | GNN | 512-1024 | 20-40 GB |
-| > 50,000 | GNN | 1024-2048 | 30-60 GB |
-| Any | MLP on features | 2048-8192 | 5-15 GB |
-| Any | MLP on features (AMP) | 4096-16384 | 5-15 GB |
-
-**Rule of thumb**: If `nvidia-smi` shows < 20 GB VRAM used during training, **double the batch size**.
-
-### Mandatory A100 Optimizations
-
-Every training script MUST include ALL of these:
-
-```python
-import torch
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# --- A100 optimizations (MANDATORY) ---
-if device.type == "cuda":
-    # 1. Enable TF32 for ~3x faster matmul (A100 exclusive)
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
-
-    # 2. Enable cuDNN autotuner (finds fastest conv algorithms)
-    torch.backends.cudnn.benchmark = True
-
-    # 3. Print GPU info for verification
-    props = torch.cuda.get_device_properties(0)
-    print(f"GPU: {props.name}")
-    print(f"VRAM: {props.total_mem / 1e9:.1f} GB")
-    print(f"TF32: {torch.backends.cuda.matmul.allow_tf32}")
-# --- End A100 optimizations ---
-```
-
-### Mixed Precision (AMP) — Use ALWAYS on A100
-
-AMP gives ~1.5-2x speedup with negligible accuracy loss on A100:
-
-```python
+# 3. AMP
 from torch.cuda.amp import autocast, GradScaler
-
 scaler = GradScaler()
-
-for batch in loader:
-    batch = batch.to(device)
-    optimizer.zero_grad()
-
-    with autocast(device_type="cuda"):    # FP16 forward pass
-        pred = model(batch)
-        loss = criterion(pred, target)
-
-    scaler.scale(loss).backward()         # Scaled FP16 backward
-    scaler.unscale_(optimizer)
-    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-    scaler.step(optimizer)
-    scaler.update()
+with autocast(device_type="cuda"): ...
 ```
 
 ### GPU Monitoring During Training
@@ -1401,7 +1325,7 @@ Batch Size Recommendations for A100-SXM4-80GB:
 | CGCNN      | 256        | 512       | Lightweight, memory-efficient  |
 | SchNet     | 128        | 256       | Medium memory, filter convs    |
 | DimeNet++  | 32         | 64-128    | Heavy, triplet interactions    |
-| RF/sklearn | N/A        | N/A       | CPU-based, no GPU needed       |
+| Roost/CrabNet | 512   | 1024      | Composition models, efficient  |
 | MLP        | 1024       | 2048      | Dense layers, very efficient   |
 
 Notes:

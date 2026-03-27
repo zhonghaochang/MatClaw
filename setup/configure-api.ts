@@ -10,7 +10,11 @@ import os from 'os';
 import path from 'path';
 import ora from 'ora';
 import { select, input, password, confirm, Separator } from '@inquirer/prompts';
-import { readEnvFile } from '../src/env.js';
+import {
+  getCodexAuthFilePath,
+  hasCodexAuthFile,
+  readEnvFile,
+} from '../src/env.js';
 import { writeEnvKeys, removeEnvKeys } from './env-writer.js';
 import { emitStatus } from './status.js';
 import { c, println, boxTop, boxLine, boxBottom, boxDivider, ok, warn, fail, info, phaseHeader, phaseFooter } from './ui.js';
@@ -42,6 +46,10 @@ function providerLabel(p: ProviderConfig): string {
 
 function providerDesc(p: ProviderConfig): string | undefined {
   return getLocale() === 'zh' ? p.descZh : p.descEn;
+}
+
+function isOpenAICodexProvider(p: ProviderConfig): boolean {
+  return p.id === 'openai';
 }
 
 const PROVIDERS: ProviderConfig[] = [
@@ -83,14 +91,14 @@ const PROVIDERS: ProviderConfig[] = [
     label: 'OpenAI',
     labelEn: 'OpenAI',
     labelZh: 'OpenAI',
-    descEn: 'GPT-4.1 / o4-mini | Pay per use',
-    descZh: 'GPT-4.1 / o4-mini | 按量付费',
+    descEn: 'GPT-5.3-Codex | Codex OAuth or API Key',
+    descZh: 'GPT-5.3-Codex | 支持 Codex OAuth 或 API Key',
     engine: 'codex',
     apiKeyEnvName: 'OPENAI_API_KEY',
     apiKeyPrefix: 'sk-',
-    defaultModel: 'o4-mini',
+    defaultModel: 'gpt-5.3-codex',
     needsModel: true,
-    authMethods: ['api_key', 'env_ref'],
+    authMethods: ['oauth_auto', 'api_key', 'env_ref'],
   },
   {
     id: 'deepseek',
@@ -700,7 +708,13 @@ const PROVIDERS: ProviderConfig[] = [
 // Keys belonging to each engine (for cleanup when switching)
 const ENGINE_KEYS: Record<string, string[]> = {
   claude: ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN'],
-  codex: ['CODEX_API_KEY', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CODEX_MODEL'],
+  codex: [
+    'CODEX_API_KEY',
+    'OPENAI_API_KEY',
+    'OPENAI_BASE_URL',
+    'CODEX_MODEL',
+    'CODEX_REASONING_EFFORT',
+  ],
   gemini: ['GOOGLE_API_KEY'],
 };
 
@@ -723,6 +737,11 @@ function sanitizeApiKey(raw: string): string {
   // Strip trailing semicolons
   key = key.replace(/;+$/, '');
   return key.trim();
+}
+
+function detectCodexAuthPath(): string | undefined {
+  const authPath = getCodexAuthFilePath();
+  return hasCodexAuthFile() ? authPath : undefined;
 }
 
 function maskKey(key: string): string {
@@ -771,12 +790,14 @@ function detectExistingConfig(projectRoot: string): ExistingConfig | null {
     'ANTHROPIC_API_KEY',
     'ANTHROPIC_BASE_URL',
     'CLAUDE_CODE_OAUTH_TOKEN',
+    'CODEX_API_KEY',
     'OPENAI_API_KEY',
     'OPENAI_BASE_URL',
+    'CODEX_MODEL',
     'GOOGLE_API_KEY',
   ]);
 
-  const engine = env.AGENT_ENGINE || 'claude';
+  const engine = env.AGENT_ENGINE || 'codex';
 
   if (env.ANTHROPIC_API_KEY) {
     // Identify provider from base URL
@@ -797,7 +818,8 @@ function detectExistingConfig(projectRoot: string): ExistingConfig | null {
   if (env.GOOGLE_API_KEY) {
     return { engine, provider: 'Google Gemini', maskedKey: maskKey(env.GOOGLE_API_KEY) };
   }
-  if (env.OPENAI_API_KEY) {
+  const codexApiKey = env.CODEX_API_KEY || env.OPENAI_API_KEY;
+  if (codexApiKey) {
     // Identify provider from base URL
     const baseUrl = env.OPENAI_BASE_URL || '';
     const provider = baseUrl
@@ -808,13 +830,36 @@ function detectExistingConfig(projectRoot: string): ExistingConfig | null {
         })
       : undefined;
     const label = provider ? provider.label : (engine === 'codex' ? 'OpenAI' : 'OpenAI-compatible');
-    return { engine, provider: label, maskedKey: maskKey(env.OPENAI_API_KEY) };
+    return { engine, provider: label, maskedKey: maskKey(codexApiKey) };
+  }
+
+  const codexAuthPath = detectCodexAuthPath();
+  if (codexAuthPath && engine === 'codex') {
+    return {
+      engine,
+      provider: 'OpenAI Codex OAuth',
+      maskedKey: `OAuth cache (${codexAuthPath})`,
+    };
   }
 
   // Check OAuth fallback
   const oauthToken = detectOAuthToken();
-  if (oauthToken) {
+  if (oauthToken && engine === 'claude') {
     return { engine: 'claude', provider: 'Claude OAuth', maskedKey: 'OAuth token (auto-detected)' };
+  }
+  if (codexAuthPath) {
+    return {
+      engine: 'codex',
+      provider: 'OpenAI Codex OAuth',
+      maskedKey: `OAuth cache (${codexAuthPath})`,
+    };
+  }
+  if (oauthToken) {
+    return {
+      engine: 'claude',
+      provider: 'Claude OAuth',
+      maskedKey: 'OAuth token (auto-detected)',
+    };
   }
 
   return null;
@@ -878,7 +923,7 @@ async function validateOpenAIKey(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: model || 'gpt-4o-mini',
+        model: model || 'gpt-5.3-codex',
         max_tokens: 1,
         messages: [{ role: 'user', content: 'hi' }],
       }),
@@ -989,7 +1034,7 @@ export async function run(_args: string[]): Promise<void> {
   // Step 2: Provider selection (categorized)
   const categories: { label: string; ids: string[] }[] = [
     { label: t('api.cat.recommended'),
-      ids: ['anthropic'] },
+      ids: ['openai', 'anthropic'] },
     { label: t('api.cat.international'),
       ids: ['gemini', 'openai', 'deepseek', 'mistral', 'xai', 'perplexity'] },
     { label: t('api.cat.domestic'),
@@ -1056,10 +1101,16 @@ export async function run(_args: string[]): Promise<void> {
       choices.push({ name: t('api.authPasteKey'), value: 'api_key' });
     }
     if (providerConfig.authMethods.includes('oauth_auto')) {
-      const oauthToken = detectOAuthToken();
-      const label = oauthToken
-        ? t('api.authOAuthDetected')
-        : t('api.authOAuthNotDetected');
+      const oauthDetected = isOpenAICodexProvider(providerConfig)
+        ? !!detectCodexAuthPath()
+        : !!detectOAuthToken();
+      const label = isOpenAICodexProvider(providerConfig)
+        ? oauthDetected
+          ? t('api.authCodexOAuthDetected')
+          : t('api.authCodexOAuthNotDetected')
+        : oauthDetected
+          ? t('api.authClaudeOAuthDetected')
+          : t('api.authClaudeOAuthNotDetected');
       choices.push({ name: label, value: 'oauth_auto' });
     }
     if (providerConfig.authMethods.includes('env_ref')) {
@@ -1072,13 +1123,24 @@ export async function run(_args: string[]): Promise<void> {
     });
 
     if (authMethod === 'oauth_auto') {
-      const token = detectOAuthToken();
-      if (!token) {
-        ora().fail(t('api.authOAuthFail'));
+      const codexAuthPath = detectCodexAuthPath();
+      const claudeToken = detectOAuthToken();
+      const oauthDetected = isOpenAICodexProvider(providerConfig)
+        ? !!codexAuthPath
+        : !!claudeToken;
+      if (!oauthDetected) {
+        const failMessage = isOpenAICodexProvider(providerConfig)
+          ? `${t('api.authCodexOAuthFail')} (${getCodexAuthFilePath()})`
+          : t('api.authClaudeOAuthFail');
+        ora().fail(failMessage);
         process.exit(1);
       }
       useOAuth = true;
-      ora().succeed(t('api.authOAuthSuccess'));
+      ora().succeed(
+        isOpenAICodexProvider(providerConfig)
+          ? t('api.authCodexOAuthSuccess')
+          : t('api.authClaudeOAuthSuccess'),
+      );
     } else if (authMethod === 'env_ref') {
       useEnvRef = true;
       envRefName = await input({
@@ -1210,7 +1272,7 @@ export async function run(_args: string[]): Promise<void> {
   // Step 8: Write to .env
   // Clean up keys from other engines
   const currentEnv = readEnvFile(['AGENT_ENGINE', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN']);
-  const currentEngine = currentEnv.AGENT_ENGINE || 'claude';
+  const currentEngine = currentEnv.AGENT_ENGINE || 'codex';
   if (currentEngine !== providerConfig.engine) {
     const otherKeys = Object.entries(ENGINE_KEYS)
       .filter(([eng]) => eng !== providerConfig.engine)
@@ -1237,13 +1299,23 @@ export async function run(_args: string[]): Promise<void> {
   };
 
   if (useOAuth) {
-    // OAuth auto-detected — remove stale API key so OAuth takes effect
-    removeEnvKeys(projectRoot, ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL']);
+    // OAuth auto-detected — remove stale API key/base URL so OAuth takes effect
+    if (providerConfig.engine === 'claude') {
+      removeEnvKeys(projectRoot, ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL']);
+    } else if (providerConfig.engine === 'codex') {
+      removeEnvKeys(projectRoot, [
+        'CODEX_API_KEY',
+        'OPENAI_API_KEY',
+        'OPENAI_BASE_URL',
+      ]);
+    }
   } else if (apiKey) {
     updates[providerConfig.apiKeyEnvName] = apiKey;
     // Using explicit API key — remove stale OAuth token from .env (if any)
     if (providerConfig.engine === 'claude') {
       removeEnvKeys(projectRoot, ['CLAUDE_CODE_OAUTH_TOKEN']);
+    } else if (providerConfig.engine === 'codex') {
+      removeEnvKeys(projectRoot, ['CODEX_API_KEY']);
     }
   }
 
@@ -1258,6 +1330,7 @@ export async function run(_args: string[]): Promise<void> {
   if (model) {
     if (providerConfig.engine === 'codex') {
       updates.CODEX_MODEL = model;
+      updates.CODEX_REASONING_EFFORT = 'high';
     } else {
       updates.AGENT_MODEL = model;
     }

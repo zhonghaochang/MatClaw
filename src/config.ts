@@ -48,13 +48,13 @@ export const STORE_DIR = path.resolve(PROJECT_ROOT, 'store');
 export const GROUPS_DIR = path.resolve(PROJECT_ROOT, 'groups');
 export const DATA_DIR = path.resolve(PROJECT_ROOT, 'data');
 
-// Agent engine: 'claude' (default), 'codex' (OpenAI-compatible), or 'gemini'
+// Agent engine: 'codex' (default), 'claude', or 'gemini'
 export const AGENT_ENGINE =
-  process.env.AGENT_ENGINE || envConfig.AGENT_ENGINE || 'claude';
+  process.env.AGENT_ENGINE || envConfig.AGENT_ENGINE || 'codex';
 
 // Agent model: for Claude engine sets CLAUDE_CODE_MODEL, for Codex sets CODEX_MODEL
 // Claude: 'claude-sonnet-4-5-20250514', 'claude-opus-4-5-20250414', etc.
-// Codex: 'o4-mini', 'gpt-4.1', etc.
+// Codex: 'gpt-5.3-codex', 'gpt-5-codex', etc.
 export const AGENT_MODEL =
   process.env.AGENT_MODEL || envConfig.AGENT_MODEL || '';
 

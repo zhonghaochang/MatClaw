@@ -59,7 +59,7 @@ MatClaw 是一个**能自主执行材料科学计算的 AI Agent**。你用自�
 - **多种 MLIP 模型** — MACE-MP-0（预装）、CHGNet、SevenNet、MatGL 全部预装，支持快速筛选和分子动力学
 - **开箱即用** — QE 7.5、LAMMPS、RASPA3、MACE、pymatgen、ASE、PyTorch 全部预装
 - **安全隔离** — 每次计算都在一次性 Docker 容器中运行，文件系统隔离
-- **灵活的 LLM 后端** — 支持 Anthropic Claude、DeepSeek 或任何 Anthropic 兼容 API
+- **灵活的 LLM 后端** — 默认使用 OpenAI Codex（`gpt-5.3-codex`，推理 `high`），同时也支持 Anthropic Claude 以及 OpenAI/Anthropic 兼容 API
 - **多通道接入** — 通过飞书、钉钉、Gmail、WhatsApp、Telegram、Discord、Slack 对话
 - **聊天命令** — `/watch`、`/status`、`/stop`、`/sessions`、`/new`、`/resume`、`/compact` — 直接在聊天中管理会话、监控进度、控制 Agent
 - **实时监控面板** — 内置 Web 界面 (`localhost:3210`)，实时查看 Agent 活动、解析对话记录、查看容器日志
@@ -166,8 +166,9 @@ echo '{
   "chatJid": "test@g.us",
   "isMain": false,
   "secrets": {
-    "ANTHROPIC_API_KEY": "your-api-key",
-    "ANTHROPIC_BASE_URL": "https://api.anthropic.com"
+    "OPENAI_API_KEY": "your-api-key",
+    "CODEX_MODEL": "gpt-5.3-codex",
+    "CODEX_REASONING_EFFORT": "high"
   }
 }' | docker run -i -v ./workspace:/workspace/group matclaw-agent:latest
 ```
@@ -413,13 +414,14 @@ npm run dev
 
 ### API 密钥
 
-MatClaw 支持任何 Anthropic 兼容 API。通过 stdin JSON 传入凭据：
+MatClaw 默认走 Codex/OpenAI 认证，同时也支持 Anthropic 兼容 API。通过 stdin JSON 传入凭据：
 
 ```json
 {
   "secrets": {
-    "ANTHROPIC_API_KEY": "your-key",
-    "ANTHROPIC_BASE_URL": "https://api.anthropic.com"
+    "OPENAI_API_KEY": "your-key",
+    "CODEX_MODEL": "gpt-5.3-codex",
+    "CODEX_REASONING_EFFORT": "high"
   }
 }
 ```
@@ -428,7 +430,8 @@ MatClaw 支持任何 Anthropic 兼容 API。通过 stdin JSON 传入凭据：
 
 | 提供商 | Base URL | 备注 |
 |--------|----------|------|
-| [Anthropic](https://www.anthropic.com/) | `https://api.anthropic.com` | Claude 系列模型，推荐 |
+| [OpenAI](https://platform.openai.com/) | `https://api.openai.com/v1` | Codex 默认路径，支持 `gpt-5.3-codex` |
+| [Anthropic](https://www.anthropic.com/) | `https://api.anthropic.com` | Claude 系列模型 |
 | [DeepSeek](https://www.deepseek.com/) | `https://api.deepseek.com/anthropic` | 性价比高，支持 tool_use |
 
 ### 环境变量

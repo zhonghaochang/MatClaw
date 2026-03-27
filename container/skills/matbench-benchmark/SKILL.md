@@ -7,6 +7,19 @@ description: MatBench Materials Science Benchmarking (9 sub-skills: task-setup, 
 
 MatBench is a standardized benchmark suite for evaluating machine learning models on materials science property prediction tasks. It contains 13 supervised learning tasks spanning composition-based and structure-based inputs, covering regression and classification problems. All tasks use a strict 5-fold nested cross-validation protocol with pre-defined splits, ensuring fair and reproducible comparison across models. MatBench is the de facto standard for reporting ML performance in computational materials science, with an official leaderboard tracking state-of-the-art results.
 
+## MANDATORY: Deep Learning First Policy
+
+**ALWAYS use deep learning for MatBench tasks. NEVER default to traditional ML (sklearn, XGBoost, RandomForest, GBR).**
+
+When the user asks to "beat SOTA", "刷榜", "optimize", or any performance-oriented request:
+1. **Study reference repos** at `/workspace/group/reference/repos/` — read actual model code from 51 SOTA repositories
+2. **Design novel architectures** inspired by SOTA models — equivariant GNNs, graph transformers, foundation model fine-tuning, attention-based composition models
+3. **Composition tasks** (steels, expt_gap, dielectric, expt_is_metal, glass): Use Roost, CrabNet, or design a custom composition transformer. Reference: `reference/repos/roost/`, `reference/repos/crabnet/`, `reference/repos/aviary/`
+4. **Structure tasks**: Use ALIGNN, coGN, MACE fine-tuning, or design equivariant architectures. Reference: `reference/repos/alignn/`, `reference/repos/kgcnn/`, `reference/repos/mace/`, `reference/repos/fairchem-ocp/`
+5. The goal is to produce research-quality models that could be published at top ML venues (NeurIPS, ICML, ICLR)
+
+Traditional ML (RF, GBR, XGBoost) is ONLY acceptable when the user explicitly requests "traditional ML" or "baseline". Even then, always suggest DL alternatives.
+
 ## Environment
 
 All scripts **must** use the isolated MatBench conda environment:
@@ -21,7 +34,7 @@ This is a Python 3.11 environment with the following packages installed:
 |---------|---------|
 | matbench | Benchmark framework, data loading, recording, submission |
 | matminer | Featurization (Magpie, structural fingerprints, etc.) |
-| scikit-learn | Traditional ML models (RF, GBR, SVM) |
+| scikit-learn | Metrics only (mean_absolute_error, roc_auc_score). Do NOT use sklearn models for SOTA attempts. |
 | torch (CUDA 12.8) | PyTorch with GPU support |
 | torch-geometric | Graph neural networks (CGCNN, SchNet, DimeNet++) |
 | e3nn | Equivariant neural networks (MACE, NequIP) |
@@ -70,7 +83,8 @@ All data, models, results, and outputs go to `/workspace/group/matbench/` (data 
 │   └── 2026-03-25_alignn_v2/
 │       └── ...
 ├── registry.json                  ← index of ALL experiments (append-only)
-├── repos/                         ← cloned SOTA model repos (shared)
+├── reference/                     ← 51 SOTA model repos (read-only, never modify)
+│   └── repos/
 └── best/                          ← symlinks to best result per task (auto-updated)
 ```
 
@@ -185,47 +199,53 @@ for exp in registry["experiments"]:
 | Sub-Skill | Directory | Description |
 |-----------|-----------|-------------|
 | task-setup | `task-setup/` | Load MatBench tasks, explore data, visualize distributions, understand 5-fold CV protocol |
-| composition-models | `composition-models/` | Magpie featurization + RF/GBR/MLP for composition-input tasks |
+| composition-models | `composition-models/` | Deep learning for composition-input tasks (Roost, CrabNet, Composition Transformer) |
 | structure-gnn | `structure-gnn/` | Graph neural networks (CGCNN, SchNet, DimeNet++, ALIGNN) for structure-input tasks |
 | sota-reproduction | `sota-reproduction/` | Reproduce published SOTA results (MODNet, coGN, MACE-MP-0, ALIGNN) |
 | training-pipeline | `training-pipeline/` | Training loops, learning rate schedules, early stopping, TensorBoard logging |
 | evaluation-submission | `evaluation-submission/` | Evaluate models, generate benchmark JSON, compare to leaderboard, prepare official submissions |
 | sota-reference | `sota-reference/` | **READ BEFORE REPORTING RESULTS.** Authoritative SOTA scores for all 13 tasks with top-3 models, metrics, and repo links. Prevents incorrect SOTA comparisons. |
-| model-optimization | `model-optimization/` | Hyperparameter search, ensembling, data augmentation, push beyond SOTA |
+| model-optimization | `model-optimization/` | Deep learning optimization: multi-seed/cross-architecture ensembles, transfer learning, SWA/EMA, Optuna HPO |
+| **auto-tournament** | `auto-tournament/` | **🏆 Automatic SOTA attack: 4-phase tournament (sea trial → semifinal → HPO → ensemble). Use when user says "刷榜/beat SOTA".** |
 
 ## Method Decision Guide
 
 ```
-Start here: What is your task input type?
+Start here: What does the user want?
 │
-├─ Composition string?
-│  └─ → composition-models/
-│     (RF/GBR + Magpie features, or MLP on Magpie)
+├─ "Beat SOTA" / "超越SOTA" / "top performance" / "刷榜" / "锦标赛" ?
+│  └─ → auto-tournament/ (4-phase tournament: sea trial → semifinal → HPO → ensemble)
+│     This is the PRIMARY method. It automatically:
+│     1. Reads reference repos + sota-reference for target scores
+│     2. Selects candidate architectures based on task type + dataset size
+│     3. Quick-screens on fold 0 (eliminates bad architectures)
+│     4. Full 5-fold CV for top candidates
+│     5. Optuna HPO for top 2-3
+│     6. Greedy ensemble to push beyond SOTA
 │
-├─ Crystal structure?
-│  └─ → structure-gnn/
-│     (CGCNN, SchNet, DimeNet++, ALIGNN)
+├─ Quick baseline?
+│  ├─ Composition → composition-models/ (Roost or CrabNet — still deep learning)
+│  └─ Structure → structure-gnn/ (CGCNN as starting point, then upgrade)
 │
-├─ Want to reproduce a published SOTA result?
+├─ Reproduce a published result?
 │  └─ → sota-reproduction/
-│     (MODNet, coGN, MACE-MP-0, ALIGNN configs)
 │
-├─ Need help with training loop / scheduler / logging?
+├─ Need correct SOTA numbers?
+│  └─ → sota-reference/  ⚠️  ALWAYS READ BEFORE REPORTING RESULTS
+│
+├─ Training loop / scheduler / GPU optimization?
 │  └─ → training-pipeline/
-│     (PyTorch training, TensorBoard, early stopping)
 │
-├─ Need correct SOTA numbers for comparison?
-│  └─ → sota-reference/  ⚠️  ALWAYS READ THIS BEFORE REPORTING RESULTS
-│     (Authoritative top-3 scores, metrics, model repos for all 13 tasks)
-│
-├─ Ready to evaluate and submit results?
-│  └─ → evaluation-submission/
-│     (Benchmark JSON, leaderboard comparison, submission)
-│
-└─ Want to push beyond current SOTA?
-   └─ → model-optimization/
-      (Hyperparameter search, ensembling, augmentation)
+└─ Ready to evaluate?
+   └─ → evaluation-submission/
 ```
+
+**FORBIDDEN FILE PATTERNS:**
+- ❌ `/workspace/group/matbench/my_script.py` — scripts in matbench root
+- ❌ `/workspace/group/matbench/results/*.json` — flat results dir
+- ❌ `/workspace/group/matbench/models/*.pt` — flat models dir
+- ✅ `/workspace/group/matbench/experiments/2026-03-25_my_model/scripts/train.py`
+- ✅ `/workspace/group/matbench/experiments/2026-03-25_my_model/results/task.json.gz`
 
 ## Feishu Command Examples (飞书指令示例)
 
@@ -234,7 +254,7 @@ Start here: What is your task input type?
 2. "在 matbench_mp_e_form 上用 CGCNN 跑 5-fold benchmark，保存结果"
 3. "参照 ALIGNN 配置，在 matbench_perovskites 上训练，目标超过 0.0269 MAE"
 4. "对全部 8 个结构任务用 CGCNN+SchNet+DimeNet++ 集成，保存完整 benchmark"
-5. "在 matbench_steels 上用随机森林+Magpie 特征跑 benchmark，分析特征重要性"
+5. "在 matbench_steels 上用 Roost 模型跑 benchmark，分析注意力权重"
 6. "加载之前的 benchmark 结果，和排行榜 SOTA 做对比图"
 7. "搜索最新的 matbench 排行榜，找到当前 SOTA 模型，尝试复现"
 8. "在 matbench_mp_e_form 上做超参优化，搜索最优学习率和模型配置"

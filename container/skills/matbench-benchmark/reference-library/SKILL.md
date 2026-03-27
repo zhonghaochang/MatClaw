@@ -7,7 +7,7 @@
 - You want to adapt an existing model's code for a new task
 
 ## Location
-All reference repositories are at `/workspace/group/reference/repos/`. These are **read-only references** — never modify them. Copy code to your experiment directory before editing.
+All reference repositories are at `/workspace/group/matbench/reference/repos/`. These are **read-only references** — never modify them. Copy code to your experiment directory before editing.
 
 ## Repository Index
 
@@ -77,23 +77,23 @@ All reference repositories are at `/workspace/group/reference/repos/`. These are
 ### 1. Study a Model Architecture
 ```bash
 # Example: understand how ALIGNN builds line graphs
-cat /workspace/group/reference/repos/alignn/alignn/graphs.py
-cat /workspace/group/reference/repos/alignn/alignn/models/alignn.py
+cat /workspace/group/matbench/reference/repos/alignn/alignn/graphs.py
+cat /workspace/group/matbench/reference/repos/alignn/alignn/models/alignn.py
 ```
 
 ### 2. Find Training Configurations
 ```bash
 # Example: see how coGN trains on matbench
-find /workspace/group/reference/repos/kgcnn -name "*.py" | xargs grep -l "matbench"
-cat /workspace/group/reference/repos/kgcnn/training/hyper/hyper_mp_e_form.py
+find /workspace/group/matbench/reference/repos/kgcnn -name "*.py" | xargs grep -l "matbench"
+cat /workspace/group/matbench/reference/repos/kgcnn/training/hyper/hyper_mp_e_form.py
 ```
 
 ### 3. Look at Official MatBench Submissions
 ```bash
 # The matbench repo contains ALL official submissions with code!
-ls /workspace/group/reference/repos/matbench/benchmarks/
+ls /workspace/group/matbench/reference/repos/matbench/benchmarks/
 # Each folder has: results.json.gz + run.py (or notebook)
-cat /workspace/group/reference/repos/matbench/benchmarks/matbench_v0.1_coGN/run.py
+cat /workspace/group/matbench/reference/repos/matbench/benchmarks/matbench_v0.1_coGN/run.py
 ```
 
 ### 4. Adapt Code for Your Experiment
@@ -101,7 +101,7 @@ cat /workspace/group/reference/repos/matbench/benchmarks/matbench_v0.1_coGN/run.
 # NEVER modify reference repos. Copy to experiment dir first:
 import shutil
 shutil.copytree(
-    "/workspace/group/reference/repos/alignn/alignn",
+    "/workspace/group/matbench/reference/repos/alignn/alignn",
     "/workspace/group/matbench/experiments/2026-03-25_alignn_custom/alignn_src"
 )
 # Then modify the copy

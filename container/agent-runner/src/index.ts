@@ -3,8 +3,8 @@
  * Runs inside a container, receives config via stdin, outputs result to stdout
  *
  * Supports two agent engines (selected via AGENT_ENGINE env var):
- *   - claude (default): Uses @anthropic-ai/claude-agent-sdk
- *   - codex: Uses @openai/codex-sdk (any OpenAI-compatible API)
+ *   - codex (default): Uses @openai/codex-sdk (any OpenAI-compatible API)
+ *   - claude: Uses @anthropic-ai/claude-agent-sdk
  *
  * Input protocol:
  *   Stdin: Full ContainerInput JSON (read until EOF)
@@ -55,6 +55,7 @@ const MANAGED_SDK_ENV_KEYS = [
   'OPENAI_API_KEY',
   'OPENAI_BASE_URL',
   'CODEX_MODEL',
+  'CODEX_REASONING_EFFORT',
   'GOOGLE_API_KEY',
 ] as const;
 
@@ -189,7 +190,7 @@ function refreshSdkEnv(sdkEnv: Record<string, string | undefined>): void {
  * Uses dynamic import so only the selected engine's dependencies are loaded.
  */
 async function createEngine(): Promise<AgentEngine> {
-  const engineType = process.env['AGENT_ENGINE'] || 'claude';
+  const engineType = process.env['AGENT_ENGINE'] || 'codex';
   log(`Creating engine: ${engineType}`);
 
   switch (engineType) {
